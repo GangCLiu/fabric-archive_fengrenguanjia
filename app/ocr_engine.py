@@ -17,12 +17,21 @@ def get_ocr():
         try:
             from paddleocr import PaddleOCR
             # 使用轻量级中文模型
-            _ocr = PaddleOCR(
-                use_angle_cls=True,  # 方向分类
-                lang='ch',           # 中文
-                show_log=False,      # 不显示日志
-                use_gpu=False        # CPU运行
-            )
+            init_kwargs = {
+                'use_angle_cls': True,  # 方向分类
+                'lang': 'ch',           # 中文
+                'use_gpu': False        # CPU运行
+            }
+
+            # 兼容不同版本 PaddleOCR：部分版本不支持 show_log 参数
+            try:
+                _ocr = PaddleOCR(show_log=False, **init_kwargs)
+            except Exception as init_error:
+                error_message = str(init_error)
+                if 'show_log' not in error_message and 'Unknown argument' not in error_message:
+                    raise
+                _ocr = PaddleOCR(**init_kwargs)
+
             print("✅ OCR引擎初始化成功")
         except Exception as e:
             print(f"❌ OCR初始化失败: {e}")
