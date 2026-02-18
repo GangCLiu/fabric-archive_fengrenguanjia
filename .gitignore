@@ -2,10 +2,12 @@
 data/order_images/*
 data/fabric_images/*
 data/garment_images/*
+data/pattern_images/*
 !data/.gitkeep
 !data/order_images/.gitkeep
 !data/fabric_images/.gitkeep
 !data/garment_images/.gitkeep
+!data/pattern_images/.gitkeep
 
 # 数据库
 data/*.db

@@ -1,6 +1,7 @@
 """
 布料档案管家 - 主程序
 Fabric Archive Manager
+要把工作目录 cd 在: \fabric-archive-main
 """
 import streamlit as st
 import sys
@@ -10,10 +11,18 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from database import (
-    init_database, add_fabric, get_all_fabrics, get_fabric_by_id,
-    update_fabric, delete_fabric, add_garment, delete_garment,
-    get_all_shops, export_to_json, import_from_json
+    init_database,
+    add_fabric, get_all_fabrics, get_fabric_by_id,
+    update_fabric, delete_fabric,
+    add_garment, delete_garment,
+    get_all_shops,
+
+    add_pattern, get_all_patterns, get_pattern_by_id, update_pattern, delete_pattern,
+    add_size_profile, get_all_size_profiles, get_size_profile_by_id, update_size_profile, delete_size_profile,
+
+    export_to_json, import_from_json
 )
+
 from ocr_engine import recognize_image
 from utils import save_uploaded_file, compress_image, format_price, format_length, format_width, format_date, get_image_display_path
 import json
@@ -424,6 +433,9 @@ def show_backup():
             st.write(f"备份时间: {data.get('export_time', '未知')}")
             st.write(f"布料数量: {len(data.get('fabrics', []))}")
             st.write(f"成衣数量: {len(data.get('garments', []))}")
+            st.write(f"纸样数量: {len(data.get('patterns', []))}")
+            st.write(f"尺码档案数量: {len(data.get('size_profiles', []))}")
+
             
             if st.checkbox("确认导入（会覆盖现有数据）"):
                 import_from_json(data)
@@ -431,6 +443,299 @@ def show_backup():
         except Exception as e:
             st.error(f"导入失败: {e}")
 
+def show_pattern_list():
+    """纸样列表"""
+    st.header("📄 纸样列表")
+
+    col_a, col_b, col_c = st.columns([3, 1, 1])
+    with col_a:
+        search = st.text_input("🔍 搜索纸样", placeholder="输入纸样名称...")
+    with col_b:
+        view_mode = st.selectbox("📊 视图", ["网格", "列表"])
+    with col_c:
+        if st.button("➕ 去添加纸样", use_container_width=True):
+            st.session_state.page = "pattern_add"
+            st.rerun()
+
+    patterns = get_all_patterns(search=search or None)
+    st.write(f"找到 **{len(patterns)}** 个纸样")
+    st.divider()
+
+    if view_mode == "网格":
+        cols = st.columns(3)
+        for idx, p in enumerate(patterns):
+            with cols[idx % 3]:
+                st.markdown('<div class="fabric-card">', unsafe_allow_html=True)
+
+                img_path = get_image_display_path(p.get("image_path"))
+                if img_path:
+                    st.image(img_path, use_container_width=True)
+                else:
+                    st.image("https://via.placeholder.com/300x200?text=无图片", use_container_width=True)
+
+                st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
+                if p.get("notes"):
+                    st.write(p["notes"][:60] + "..." if len(p["notes"]) > 60 else p["notes"])
+                st.write(f"🕒 {format_date(p.get('created_at'))}")
+
+                if st.button("查看详情", key=f"pat_view_{p['id']}"):
+                    st.session_state.page = "pattern_detail"
+                    st.session_state.pattern_id = p["id"]
+                    st.rerun()
+
+                st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        for p in patterns:
+            col1, col2, col3 = st.columns([1, 4, 1])
+            with col1:
+                img_path = get_image_display_path(p.get("image_path"))
+                if img_path:
+                    st.image(img_path, width=100)
+            with col2:
+                st.write(f"**{p['name']}**")
+                if p.get("notes"):
+                    st.write(p["notes"])
+                st.write(f"🕒 {format_date(p.get('created_at'))}")
+            with col3:
+                if st.button("详情", key=f"pat_list_view_{p['id']}"):
+                    st.session_state.page = "pattern_detail"
+                    st.session_state.pattern_id = p["id"]
+                    st.rerun()
+            st.divider()
+
+
+def show_pattern_add():
+    """添加纸样"""
+    st.header("➕ 添加纸样")
+    st.info("上传纸样图片，填写名称与备注后保存")
+
+    with st.form("pattern_add_form"):
+        name = st.text_input("纸样名称 *")
+        img = st.file_uploader("纸样图片", type=["png", "jpg", "jpeg"])
+        notes = st.text_area("备注", placeholder="例如：纸样来源、尺码范围、打印说明等")
+
+        col_s, col_b = st.columns(2)
+        with col_s:
+            submitted = st.form_submit_button("💾 保存纸样", use_container_width=True)
+        with col_b:
+            back = st.form_submit_button("取消并返回", use_container_width=True)
+
+        if back:
+            st.session_state.page = "pattern_list"
+            st.rerun()
+
+        if submitted:
+            if not name:
+                st.error("请填写纸样名称")
+                return
+
+            image_path = None
+            if img:
+                raw_path = save_uploaded_file(img, "pattern_images")
+                image_path = compress_image(raw_path)
+
+            pid = add_pattern(name=name, image_path=image_path, notes=notes or None)
+            st.success(f"✅ 纸样已保存，ID: {pid}")
+            st.session_state.page = "pattern_list"
+            st.rerun()
+
+
+def show_pattern_detail():
+    """纸样详情"""
+    pattern_id = st.session_state.get("pattern_id")
+    if not pattern_id:
+        st.error("未指定纸样ID")
+        return
+
+    p = get_pattern_by_id(pattern_id)
+    if not p:
+        st.error("纸样不存在")
+        return
+
+    if st.button("← 返回纸样列表"):
+        st.session_state.page = "pattern_list"
+        st.rerun()
+
+    st.header(f"📄 {p['name']}")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        img_path = get_image_display_path(p.get("image_path"))
+        if img_path:
+            st.image(img_path, use_container_width=True)
+        else:
+            st.image("https://via.placeholder.com/300x200?text=无图片", use_container_width=True)
+
+        st.divider()
+        confirm_del = st.checkbox("确认删除该纸样")
+        if st.button("🗑️ 删除该纸样", type="secondary", use_container_width=True):
+            if confirm_del:
+                delete_pattern(pattern_id)
+                st.success("已删除")
+                st.session_state.page = "pattern_list"
+                st.session_state.pop("pattern_id", None)
+                st.rerun()
+            else:
+                st.error("请先勾选确认删除")
+
+    with col2:
+        st.subheader("📋 信息")
+        st.write(f"录入时间: {format_date(p.get('created_at'))}")
+
+        st.divider()
+        st.subheader("✏️ 编辑")
+        with st.form("pattern_edit_form"):
+            new_name = st.text_input("纸样名称 *", value=p.get("name") or "")
+            new_img = st.file_uploader("替换图片（可选）", type=["png", "jpg", "jpeg"])
+            new_notes = st.text_area("备注", value=p.get("notes") or "")
+
+            if st.form_submit_button("保存修改", use_container_width=True):
+                if not new_name:
+                    st.error("纸样名称不能为空")
+                    return
+
+                new_image_path = p.get("image_path")
+                if new_img:
+                    raw_path = save_uploaded_file(new_img, "pattern_images")
+                    new_image_path = compress_image(raw_path)
+
+                update_pattern(pattern_id, name=new_name, image_path=new_image_path, notes=new_notes or None)
+                st.success("✅ 已保存修改")
+                st.rerun()
+
+
+def show_size_list():
+    """尺码档案列表"""
+    st.header("📐 尺码档案")
+
+    col_a, col_b = st.columns([3, 1])
+    with col_a:
+        search = st.text_input("🔍 搜索档案", placeholder="输入档案名称...")
+    with col_b:
+        if st.button("➕ 新增尺码档案", use_container_width=True):
+            st.session_state.page = "size_add"
+            st.rerun()
+
+    profiles = get_all_size_profiles(search=search or None)
+    st.write(f"找到 **{len(profiles)}** 个尺码档案")
+    st.divider()
+
+    if not profiles:
+        st.info("还没有尺码档案，点击右侧按钮新增")
+        return
+
+    for sp in profiles:
+        col1, col2, col3 = st.columns([4, 2, 1])
+        with col1:
+            st.write(f"**{sp['name']}**")
+            h = sp.get("height_cm")
+            w = sp.get("weight_kg")
+            st.write(f"身高: {h if h is not None else '-'} cm，体重: {w if w is not None else '-'} kg")
+            if sp.get("description"):
+                st.write(sp["description"])
+        with col2:
+            st.write(f"🕒 {format_date(sp.get('created_at'))}")
+        with col3:
+            if st.button("详情", key=f"sp_view_{sp['id']}"):
+                st.session_state.page = "size_detail"
+                st.session_state.size_profile_id = sp["id"]
+                st.rerun()
+        st.divider()
+
+
+def show_size_add():
+    """新增尺码档案"""
+    st.header("➕ 新增尺码档案")
+    st.info("填写基本信息后保存")
+
+    with st.form("size_add_form"):
+        name = st.text_input("档案名称 *", placeholder="例如：我自己，家人A")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            height_cm = st.number_input("身高 cm", min_value=0, step=1)
+        with col2:
+            weight_kg = st.number_input("体重 kg", min_value=0.0, step=0.1)
+
+        description = st.text_area("描述", placeholder="例如：偏瘦，肩略宽，喜欢宽松版型")
+
+        col_s, col_b = st.columns(2)
+        with col_s:
+            submitted = st.form_submit_button("💾 保存基本信息", use_container_width=True)
+        with col_b:
+            back = st.form_submit_button("取消并返回", use_container_width=True)
+
+        if back:
+            st.session_state.page = "size_list"
+            st.rerun()
+
+        if submitted:
+            if not name:
+                st.error("请填写档案名称")
+                return
+
+            h_val = int(height_cm) if height_cm and height_cm > 0 else None
+            w_val = float(weight_kg) if weight_kg and weight_kg > 0 else None
+
+            sid = add_size_profile(name=name, height_cm=h_val, weight_kg=w_val, description=description or None)
+            st.success(f"✅ 尺码档案已保存，ID: {sid}")
+            st.session_state.page = "size_list"
+            st.rerun()
+
+
+def show_size_detail():
+    """尺码档案详情"""
+    sid = st.session_state.get("size_profile_id")
+    if not sid:
+        st.error("未指定尺码档案ID")
+        return
+
+    sp = get_size_profile_by_id(sid)
+    if not sp:
+        st.error("尺码档案不存在")
+        return
+
+    if st.button("← 返回尺码档案列表"):
+        st.session_state.page = "size_list"
+        st.rerun()
+
+    st.header(f"📐 {sp['name']}")
+
+    st.subheader("✏️ 编辑")
+    with st.form("size_edit_form"):
+        new_name = st.text_input("档案名称 *", value=sp.get("name") or "")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            new_height = st.number_input("身高 cm", min_value=0, step=1, value=int(sp.get("height_cm") or 0))
+        with col2:
+            new_weight = st.number_input("体重 kg", min_value=0.0, step=0.1, value=float(sp.get("weight_kg") or 0.0))
+
+        new_desc = st.text_area("描述", value=sp.get("description") or "")
+
+        if st.form_submit_button("保存修改", use_container_width=True):
+            if not new_name:
+                st.error("档案名称不能为空")
+                return
+
+            h_val = int(new_height) if new_height and new_height > 0 else None
+            w_val = float(new_weight) if new_weight and new_weight > 0 else None
+
+            update_size_profile(sid, name=new_name, height_cm=h_val, weight_kg=w_val, description=new_desc or None)
+            st.success("✅ 已保存修改")
+            st.rerun()
+
+    st.divider()
+    confirm_del = st.checkbox("确认删除该尺码档案")
+    if st.button("🗑️ 删除该尺码档案", type="secondary"):
+        if confirm_del:
+            delete_size_profile(sid)
+            st.success("已删除")
+            st.session_state.page = "size_list"
+            st.session_state.pop("size_profile_id", None)
+            st.rerun()
+        else:
+            st.error("请先勾选确认删除")
 
 # 侧边栏导航
 def sidebar():
@@ -442,14 +747,27 @@ def sidebar():
         pages = {
             "home": "📦 布料列表",
             "add": "➕ 添加布料",
+
+            "pattern_list": "📄 纸样列表",
+            "pattern_add": "➕ 添加纸样",
+            "size_list": "📐 尺码档案",
+
             "backup": "💾 数据备份"
         }
+
         
         for page_id, page_name in pages.items():
             if st.button(page_name, use_container_width=True):
                 st.session_state.page = page_id
                 if page_id != "detail":
-                    st.session_state.pop('fabric_id', None)
+                    st.session_state.pop("fabric_id", None)
+                if page_id != "pattern_detail":
+                    st.session_state.pop("pattern_id", None)
+                if page_id != "size_detail":
+                    st.session_state.pop("size_profile_id", None)
+
+                st.session_state.pop("show_add_garment", None)
+
                 st.rerun()
         
         st.divider()
@@ -475,8 +793,24 @@ def main():
         show_add_fabric()
     elif page == 'detail':
         show_fabric_detail()
+
+    elif page == "pattern_list":
+        show_pattern_list()
+    elif page == "pattern_add":
+        show_pattern_add()
+    elif page == "pattern_detail":
+        show_pattern_detail()
+
+    elif page == "size_list":
+        show_size_list()
+    elif page == "size_add":
+        show_size_add()
+    elif page == "size_detail":
+        show_size_detail()
+
     elif page == 'backup':
         show_backup()
+
 
 
 if __name__ == "__main__":

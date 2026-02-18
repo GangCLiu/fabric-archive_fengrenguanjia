@@ -11,9 +11,13 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 ORDER_IMAGES_DIR = DATA_DIR / "order_images"
 FABRIC_IMAGES_DIR = DATA_DIR / "fabric_images"
 GARMENT_IMAGES_DIR = DATA_DIR / "garment_images"
+PATTERN_IMAGES_DIR = DATA_DIR / "pattern_images"
+
+
+
 
 # 确保目录存在
-for dir_path in [ORDER_IMAGES_DIR, FABRIC_IMAGES_DIR, GARMENT_IMAGES_DIR]:
+for dir_path in [ORDER_IMAGES_DIR, FABRIC_IMAGES_DIR, GARMENT_IMAGES_DIR, PATTERN_IMAGES_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
 

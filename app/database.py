@@ -46,7 +46,31 @@ def init_database():
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE
         )
     """)
-    
+        # 纸样表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS patterns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            image_path TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 尺码档案表
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS size_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            height_cm REAL,
+            weight_kg REAL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("✅ 数据库初始化完成")
@@ -189,6 +213,146 @@ def get_all_shops():
     conn.close()
     return shops
 
+# ==================== 纸样 Patterns ====================
+
+def add_pattern(name, image_path=None, notes=None):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO patterns (name, image_path, notes)
+        VALUES (?, ?, ?)
+    """, (name, image_path, notes))
+    pattern_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return pattern_id
+
+
+def get_all_patterns(search=None):
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM patterns WHERE 1=1"
+    params = []
+    if search:
+        query += " AND name LIKE ?"
+        params.append(f"%{search}%")
+    query += " ORDER BY created_at DESC"
+
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_pattern_by_id(pattern_id):
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM patterns WHERE id = ?", (pattern_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_pattern(pattern_id, **kwargs):
+    allowed_fields = ["name", "image_path", "notes"]
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    if not updates:
+        return False
+
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+    values = list(updates.values()) + [pattern_id]
+    cursor.execute(
+        f"UPDATE patterns SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        values
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_pattern(pattern_id):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ==================== 尺码档案 Size Profiles ====================
+
+def add_size_profile(name, height_cm=None, weight_kg=None, description=None):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO size_profiles (name, height_cm, weight_kg, description)
+        VALUES (?, ?, ?, ?)
+    """, (name, height_cm, weight_kg, description))
+    profile_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return profile_id
+
+
+def get_all_size_profiles(search=None):
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM size_profiles WHERE 1=1"
+    params = []
+    if search:
+        query += " AND name LIKE ?"
+        params.append(f"%{search}%")
+    query += " ORDER BY created_at DESC"
+
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_size_profile_by_id(profile_id):
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM size_profiles WHERE id = ?", (profile_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_size_profile(profile_id, **kwargs):
+    allowed_fields = ["name", "height_cm", "weight_kg", "description"]
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    if not updates:
+        return False
+
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+    values = list(updates.values()) + [profile_id]
+    cursor.execute(
+        f"UPDATE size_profiles SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        values
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def delete_size_profile(profile_id):
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM size_profiles WHERE id = ?", (profile_id,))
+    conn.commit()
+    conn.close()
+    return True
 
 def export_to_json():
     """导出所有数据为JSON"""
@@ -204,12 +368,22 @@ def export_to_json():
     cursor.execute("SELECT * FROM garments")
     garments = [dict(row) for row in cursor.fetchall()]
     
+    # 导出纸样
+    cursor.execute("SELECT * FROM patterns")
+    patterns = [dict(row) for row in cursor.fetchall()]
+
+    # 导出尺码档案
+    cursor.execute("SELECT * FROM size_profiles")
+    size_profiles = [dict(row) for row in cursor.fetchall()]
+
     conn.close()
     
     return {
         "export_time": datetime.now().isoformat(),
         "fabrics": fabrics,
-        "garments": garments
+        "garments": garments,
+        "patterns": patterns,
+        "size_profiles": size_profiles
     }
 
 
@@ -222,6 +396,9 @@ def import_from_json(data):
         # 清空现有数据
         cursor.execute("DELETE FROM garments")
         cursor.execute("DELETE FROM fabrics")
+        cursor.execute("DELETE FROM patterns")
+        cursor.execute("DELETE FROM size_profiles")
+
         
         # 导入布料
         for fabric in data.get("fabrics", []):
@@ -256,7 +433,36 @@ def import_from_json(data):
                 garment.get("notes"),
                 garment.get("created_at")
             ))
-        
+
+        # 导入纸样
+        for p in data.get("patterns", []):
+            cursor.execute("""
+                INSERT INTO patterns (id, name, image_path, notes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                p.get("id"),
+                p.get("name"),
+                p.get("image_path"),
+                p.get("notes"),
+                p.get("created_at"),
+                p.get("updated_at")
+            ))
+
+        # 导入尺码档案
+        for sp in data.get("size_profiles", []):
+            cursor.execute("""
+                INSERT INTO size_profiles (id, name, height_cm, weight_kg, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                sp.get("id"),
+                sp.get("name"),
+                sp.get("height_cm"),
+                sp.get("weight_kg"),
+                sp.get("description"),
+                sp.get("created_at"),
+                sp.get("updated_at")
+            ))
+
         conn.commit()
         return True
     except Exception as e:
