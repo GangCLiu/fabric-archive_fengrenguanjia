@@ -11,6 +11,62 @@ import tempfile
 # 延迟导入PaddleOCR（避免启动时加载太慢）
 _ocr = None
 
+
+def _is_empty_json_parse_error(error):
+    """判断是否为 PaddleX 模型元数据空 JSON 导致的解析错误"""
+    message = str(error)
+    return (
+        'json.exception.parse_error.101' in message
+        or 'attempting to parse an empty input' in message
+    )
+
+
+def _cleanup_corrupted_paddlex_metadata():
+    """清理可能损坏的 PaddleX 缓存元数据文件（零字节 JSON）"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists():
+        return []
+
+    removed_files = []
+    for json_file in cache_root.rglob('*.json'):
+        try:
+            if json_file.is_file() and json_file.stat().st_size == 0:
+                json_file.unlink()
+                removed_files.append(str(json_file))
+        except OSError:
+            continue
+
+    return removed_files
+
+
+def _build_ocr_with_fallback(PaddleOCR):
+    """兼容不同 PaddleOCR 版本参数差异，构建 OCR 引擎"""
+    base_kwargs = {
+        'use_angle_cls': True,  # 方向分类
+        'lang': 'ch',           # 中文
+    }
+    candidate_extras = [
+        {'show_log': False, 'use_gpu': False},
+        {'show_log': False, 'device': 'cpu'},
+        {'use_gpu': False},
+        {'device': 'cpu'},
+        {},
+    ]
+
+    last_error = None
+    for extra_kwargs in candidate_extras:
+        try:
+            ocr = PaddleOCR(**base_kwargs, **extra_kwargs)
+            print(f"✅ OCR引擎初始化成功（参数: {list(extra_kwargs.keys()) or ['默认']}）")
+            return ocr
+        except Exception as init_error:
+            last_error = init_error
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError('OCR初始化失败：未知错误')
+
 def get_ocr():
     """获取OCR引擎实例（单例模式）"""
     global _ocr
@@ -21,31 +77,19 @@ def get_ocr():
 
             from paddleocr import PaddleOCR
 
-            # 兼容不同版本 PaddleOCR：不同版本参数名差异较大（show_log/use_gpu/device）
-            base_kwargs = {
-                'use_angle_cls': True,  # 方向分类
-                'lang': 'ch',           # 中文
-            }
-            candidate_extras = [
-                {'show_log': False, 'use_gpu': False},
-                {'show_log': False, 'device': 'cpu'},
-                {'use_gpu': False},
-                {'device': 'cpu'},
-                {},
-            ]
+            try:
+                _ocr = _build_ocr_with_fallback(PaddleOCR)
+            except Exception as init_error:
+                if not _is_empty_json_parse_error(init_error):
+                    raise
 
-            last_error = None
-            for extra_kwargs in candidate_extras:
-                try:
-                    _ocr = PaddleOCR(**base_kwargs, **extra_kwargs)
-                    print(f"✅ OCR引擎初始化成功（参数: {list(extra_kwargs.keys()) or ['默认']}）")
-                    break
-                except Exception as init_error:
-                    last_error = init_error
-                    continue
+                removed = _cleanup_corrupted_paddlex_metadata()
+                if removed:
+                    print(f"⚠️ 检测到损坏的 PaddleX 缓存元数据，已清理 {len(removed)} 个文件，正在重试初始化...")
+                else:
+                    print("⚠️ 检测到疑似模型元数据损坏，但未找到零字节 JSON 文件，仍尝试重试初始化...")
 
-            if _ocr is None and last_error is not None:
-                raise last_error
+                _ocr = _build_ocr_with_fallback(PaddleOCR)
         except Exception as e:
             print(f"❌ OCR初始化失败: {e}")
             raise
