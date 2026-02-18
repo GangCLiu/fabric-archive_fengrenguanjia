@@ -93,8 +93,8 @@ def show_home():
     
     st.divider()
     
-    # 搜索和筛选
-    col_search, col_shop, col_view = st.columns([3, 2, 1])
+    # 搜索、筛选与快捷添加
+    col_search, col_shop, col_view, col_add = st.columns([3, 2, 1, 2])
     
     with col_search:
         search = st.text_input("🔍 搜索布料", placeholder="输入名称或店铺...")
@@ -105,6 +105,12 @@ def show_home():
     
     with col_view:
         view_mode = st.selectbox("📊 视图", ["网格", "列表"])
+
+    with col_add:
+        st.write("")
+        if st.button("➕ 去添加布料", use_container_width=True):
+            st.session_state.page = "add"
+            st.rerun()
     
     # 获取筛选后的布料
     shop_filter = None if selected_shop == "全部" else selected_shop
@@ -764,10 +770,7 @@ def sidebar():
         # 导航
         pages = {
             "home": "📦 布料列表",
-            "add": "➕ 添加布料",
-
             "pattern_list": "📄 纸样列表",
-            "pattern_add": "➕ 添加纸样",
             "size_list": "📐 尺码档案",
 
             "backup": "💾 数据备份"
@@ -791,7 +794,7 @@ def sidebar():
         st.divider()
         st.caption("📝 使用说明")
         st.info("""
-        1. 点击"添加布料"上传订单截图
+        1. 在布料列表页点击"去添加布料"上传订单截图
         2. AI自动识别信息，可手动修正
         3. 在详情页添加成衣作品
         4. 定期备份数据到GitHub
