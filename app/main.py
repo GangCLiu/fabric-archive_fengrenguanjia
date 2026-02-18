@@ -372,7 +372,7 @@ def show_fabric_detail():
 
             edit_col1, edit_col2 = st.columns(2)
             with edit_col1:
-                new_length = st.number_input("剩余长度（米）", min_value=0.0, step=0.1, value=float(fabric.get('length') or 0.0))
+                new_length = st.number_input("原长（米）", min_value=0.0, step=0.1, value=float(fabric.get('length') or 0.0))
             with edit_col2:
                 new_width = st.number_input("幅宽（cm）", min_value=0, step=5, value=int(fabric.get('width') or 0))
 
