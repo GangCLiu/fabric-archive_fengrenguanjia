@@ -5,9 +5,15 @@
 import sqlite3
 import json
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 DATABASE_PATH = Path(__file__).parent.parent / "data" / "fabric_archive.db"
+
+
+def _normalize_length(value, precision="0.0001"):
+    """归一化长度，避免浮点精度误差。"""
+    return Decimal(str(value)).quantize(Decimal(precision), rounding=ROUND_HALF_UP)
 
 
 def init_database():
@@ -154,33 +160,44 @@ def get_fabric_by_id(fabric_id):
 
 def update_fabric(fabric_id, **kwargs):
     """更新布料信息"""
-    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path']
+    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path', 'order_image_path']
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
-    
+
     if not updates:
         return False
-    
+
+    if 'length' in updates and updates['length'] is not None:
+        updates['length'] = float(_normalize_length(updates['length']))
+
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
+
     set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
     values = list(updates.values()) + [fabric_id]
-    
+
     cursor.execute(f"UPDATE fabrics SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
     conn.commit()
+    changed = cursor.rowcount > 0
     conn.close()
-    return True
+    return changed
 
 
 def delete_fabric(fabric_id):
-    """删除布料（会级联删除关联的成衣）"""
+    """删除布料及其关联成衣"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM fabrics WHERE id = ?", (fabric_id,))
-    conn.commit()
-    conn.close()
-    return True
+
+    try:
+        cursor.execute("DELETE FROM garments WHERE fabric_id = ?", (fabric_id,))
+        cursor.execute("DELETE FROM fabrics WHERE id = ?", (fabric_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        return deleted
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
@@ -199,24 +216,30 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         if used_length is None:
             used_length = 0
 
-        if used_length < 0:
+        used_length_dec = _normalize_length(used_length)
+
+        if used_length_dec < 0:
             raise ValueError("使用布长不能为负数")
 
         if current_length is None:
             raise ValueError("该布料没有可扣减的剩余长度")
 
-        if used_length > current_length:
+        current_length_dec = _normalize_length(current_length)
+
+        if used_length_dec > current_length_dec:
             raise ValueError("使用布长不能超过当前剩余长度")
 
+        new_length_dec = _normalize_length(current_length_dec - used_length_dec)
+
         cursor.execute(
-            "UPDATE fabrics SET length = length - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (used_length, fabric_id)
+            "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (float(new_length_dec), fabric_id)
         )
 
         cursor.execute("""
             INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, used_length))
+        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec)))
 
         garment_id = cursor.lastrowid
         conn.commit()
@@ -229,14 +252,36 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
 
 
 def delete_garment(garment_id):
-    """删除成衣记录"""
+    """删除成衣记录，并归还对应布料的使用布长"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM garments WHERE id = ?", (garment_id,))
-    conn.commit()
-    conn.close()
-    return True
+
+    try:
+        cursor.execute("SELECT fabric_id, used_length FROM garments WHERE id = ?", (garment_id,))
+        garment = cursor.fetchone()
+        if not garment:
+            return False
+
+        fabric_id, used_length = garment
+
+        if used_length is not None:
+            cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+            fabric_row = cursor.fetchone()
+            if fabric_row and fabric_row[0] is not None:
+                restored_length = _normalize_length(fabric_row[0]) + _normalize_length(used_length)
+                cursor.execute(
+                    "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (float(_normalize_length(restored_length)), fabric_id)
+                )
+
+        cursor.execute("DELETE FROM garments WHERE id = ?", (garment_id,))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_all_shops():
