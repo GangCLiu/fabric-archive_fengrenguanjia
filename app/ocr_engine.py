@@ -3,6 +3,7 @@ OCR识别模块
 使用PaddleOCR识别订单截图中的信息
 """
 import os
+import json
 import re
 from pathlib import Path
 from PIL import Image
@@ -22,7 +23,7 @@ def _is_empty_json_parse_error(error):
 
 
 def _cleanup_corrupted_paddlex_metadata():
-    """清理可能损坏的 PaddleX 缓存元数据文件（零字节 JSON）"""
+    """清理可能损坏的 PaddleX 缓存元数据文件（空文件或非法 JSON）"""
     cache_root = Path.home() / '.paddlex' / 'official_models'
     if not cache_root.exists():
         return []
@@ -30,13 +31,52 @@ def _cleanup_corrupted_paddlex_metadata():
     removed_files = []
     for json_file in cache_root.rglob('*.json'):
         try:
-            if json_file.is_file() and json_file.stat().st_size == 0:
+            if not json_file.is_file():
+                continue
+
+            # 1) 清理零字节 JSON
+            if json_file.stat().st_size == 0:
                 json_file.unlink()
                 removed_files.append(str(json_file))
+                continue
+
+            # 2) 清理内容损坏的 JSON（非空但无法解析）
+            with json_file.open('r', encoding='utf-8') as f:
+                json.load(f)
+        except json.JSONDecodeError:
+            try:
+                json_file.unlink()
+                removed_files.append(str(json_file))
+            except OSError:
+                continue
         except OSError:
             continue
 
     return removed_files
+
+
+def _cleanup_corrupted_paddlex_model_dirs():
+    """在 parse_error 持续出现时，兜底删除可能损坏的模型目录。"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists():
+        return []
+
+    removed_dirs = []
+    # 目前日志中明确出现的故障模型；后续可按需扩展
+    target_dirs = [
+        cache_root / 'PP-LCNet_x1_0_doc_ori',
+    ]
+
+    import shutil
+    for model_dir in target_dirs:
+        try:
+            if model_dir.exists() and model_dir.is_dir():
+                shutil.rmtree(model_dir)
+                removed_dirs.append(str(model_dir))
+        except OSError:
+            continue
+
+    return removed_dirs
 
 
 def _build_ocr_with_fallback(PaddleOCR):
@@ -87,7 +127,10 @@ def get_ocr():
                 if removed:
                     print(f"⚠️ 检测到损坏的 PaddleX 缓存元数据，已清理 {len(removed)} 个文件，正在重试初始化...")
                 else:
-                    print("⚠️ 检测到疑似模型元数据损坏，但未找到零字节 JSON 文件，仍尝试重试初始化...")
+                    print("⚠️ 检测到疑似模型元数据损坏，但未找到可清理的 JSON 文件，尝试清理模型目录后重试...")
+                    removed_dirs = _cleanup_corrupted_paddlex_model_dirs()
+                    if removed_dirs:
+                        print(f"⚠️ 已清理可能损坏的模型目录 {len(removed_dirs)} 个，正在重试初始化...")
 
                 _ocr = _build_ocr_with_fallback(PaddleOCR)
         except Exception as e:
