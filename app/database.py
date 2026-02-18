@@ -5,9 +5,15 @@
 import sqlite3
 import json
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 DATABASE_PATH = Path(__file__).parent.parent / "data" / "fabric_archive.db"
+
+
+def _normalize_length(value, precision="0.0001"):
+    """归一化长度，避免浮点精度误差。"""
+    return Decimal(str(value)).quantize(Decimal(precision), rounding=ROUND_HALF_UP)
 
 
 def init_database():
@@ -199,24 +205,30 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         if used_length is None:
             used_length = 0
 
-        if used_length < 0:
+        used_length_dec = _normalize_length(used_length)
+
+        if used_length_dec < 0:
             raise ValueError("使用布长不能为负数")
 
         if current_length is None:
             raise ValueError("该布料没有可扣减的剩余长度")
 
-        if used_length > current_length:
+        current_length_dec = _normalize_length(current_length)
+
+        if used_length_dec > current_length_dec:
             raise ValueError("使用布长不能超过当前剩余长度")
 
+        new_length_dec = _normalize_length(current_length_dec - used_length_dec)
+
         cursor.execute(
-            "UPDATE fabrics SET length = length - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (used_length, fabric_id)
+            "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (float(new_length_dec), fabric_id)
         )
 
         cursor.execute("""
             INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, used_length))
+        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec)))
 
         garment_id = cursor.lastrowid
         conn.commit()
