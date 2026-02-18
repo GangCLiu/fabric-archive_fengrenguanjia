@@ -241,14 +241,36 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
 
 
 def delete_garment(garment_id):
-    """删除成衣记录"""
+    """删除成衣记录，并归还对应布料的使用布长"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM garments WHERE id = ?", (garment_id,))
-    conn.commit()
-    conn.close()
-    return True
+
+    try:
+        cursor.execute("SELECT fabric_id, used_length FROM garments WHERE id = ?", (garment_id,))
+        garment = cursor.fetchone()
+        if not garment:
+            return False
+
+        fabric_id, used_length = garment
+
+        if used_length is not None:
+            cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+            fabric_row = cursor.fetchone()
+            if fabric_row and fabric_row[0] is not None:
+                restored_length = _normalize_length(fabric_row[0]) + _normalize_length(used_length)
+                cursor.execute(
+                    "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (float(_normalize_length(restored_length)), fabric_id)
+                )
+
+        cursor.execute("DELETE FROM garments WHERE id = ?", (garment_id,))
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_all_shops():
