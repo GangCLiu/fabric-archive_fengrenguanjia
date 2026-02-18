@@ -160,33 +160,44 @@ def get_fabric_by_id(fabric_id):
 
 def update_fabric(fabric_id, **kwargs):
     """更新布料信息"""
-    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path']
+    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path', 'order_image_path']
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
-    
+
     if not updates:
         return False
-    
+
+    if 'length' in updates and updates['length'] is not None:
+        updates['length'] = float(_normalize_length(updates['length']))
+
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
+
     set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
     values = list(updates.values()) + [fabric_id]
-    
+
     cursor.execute(f"UPDATE fabrics SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
     conn.commit()
+    changed = cursor.rowcount > 0
     conn.close()
-    return True
+    return changed
 
 
 def delete_fabric(fabric_id):
-    """删除布料（会级联删除关联的成衣）"""
+    """删除布料及其关联成衣"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("DELETE FROM fabrics WHERE id = ?", (fabric_id,))
-    conn.commit()
-    conn.close()
-    return True
+
+    try:
+        cursor.execute("DELETE FROM garments WHERE fabric_id = ?", (fabric_id,))
+        cursor.execute("DELETE FROM fabrics WHERE id = ?", (fabric_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        return deleted
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
