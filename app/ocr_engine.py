@@ -2,6 +2,7 @@
 OCR识别模块
 使用PaddleOCR识别订单截图中的信息
 """
+import os
 import re
 from pathlib import Path
 from PIL import Image
@@ -15,15 +16,36 @@ def get_ocr():
     global _ocr
     if _ocr is None:
         try:
+            # 避免 PaddleX 模型源连通性检查导致初始化阻塞或失败
+            os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+
             from paddleocr import PaddleOCR
-            # 使用轻量级中文模型
-            _ocr = PaddleOCR(
-                use_angle_cls=True,  # 方向分类
-                lang='ch',           # 中文
-                show_log=False,      # 不显示日志
-                use_gpu=False        # CPU运行
-            )
-            print("✅ OCR引擎初始化成功")
+
+            # 兼容不同版本 PaddleOCR：不同版本参数名差异较大（show_log/use_gpu/device）
+            base_kwargs = {
+                'use_angle_cls': True,  # 方向分类
+                'lang': 'ch',           # 中文
+            }
+            candidate_extras = [
+                {'show_log': False, 'use_gpu': False},
+                {'show_log': False, 'device': 'cpu'},
+                {'use_gpu': False},
+                {'device': 'cpu'},
+                {},
+            ]
+
+            last_error = None
+            for extra_kwargs in candidate_extras:
+                try:
+                    _ocr = PaddleOCR(**base_kwargs, **extra_kwargs)
+                    print(f"✅ OCR引擎初始化成功（参数: {list(extra_kwargs.keys()) or ['默认']}）")
+                    break
+                except Exception as init_error:
+                    last_error = init_error
+                    continue
+
+            if _ocr is None and last_error is not None:
+                raise last_error
         except Exception as e:
             print(f"❌ OCR初始化失败: {e}")
             raise

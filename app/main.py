@@ -108,7 +108,7 @@ def show_home():
 
     with col_add:
         st.write("")
-        if st.button("➕ 去添加布料", use_container_width=True):
+        if st.button("➕ 去添加布料", width='stretch'):
             st.session_state.page = "add"
             st.rerun()
     
@@ -129,9 +129,9 @@ def show_home():
                     # 图片
                     img_path = get_image_display_path(fabric.get('fabric_image_path') or fabric.get('order_image_path'))
                     if img_path:
-                        st.image(img_path, use_container_width=True)
+                        st.image(img_path, width='stretch')
                     else:
-                        st.image("https://via.placeholder.com/300x200?text=无图片", use_container_width=True)
+                        st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
                     
                     # 信息
                     st.subheader(fabric['name'][:20] + "..." if len(fabric['name']) > 20 else fabric['name'])
@@ -181,7 +181,7 @@ def show_add_fabric():
         st.header("➕ 添加新布料")
     with action_col:
         st.write("")
-        if st.button("取消并返回", use_container_width=True):
+        if st.button("取消并返回", width='stretch'):
             for key in ["ocr_result", "last_uploaded", "temp_image_path"]:
                 st.session_state.pop(key, None)
             st.session_state.page = "home"
@@ -193,7 +193,7 @@ def show_add_fabric():
 
     if uploaded_file:
         # 显示预览
-        st.image(uploaded_file, caption="订单截图预览", use_container_width=True)
+        st.image(uploaded_file, caption="订单截图预览", width='stretch')
 
         # 初始化表单数据
         if 'ocr_result' not in st.session_state or st.session_state.get('last_uploaded') != uploaded_file.name:
@@ -230,7 +230,7 @@ def show_add_fabric():
                 with col4:
                     price = st.number_input("价格（元）", value=extracted.get('price') or 0.0, min_value=0.0, step=0.01)
 
-                submitted = st.form_submit_button("💾 保存布料", use_container_width=True)
+                submitted = st.form_submit_button("💾 保存布料", width='stretch')
 
                 if submitted:
                     if not name:
@@ -333,12 +333,12 @@ def show_fabric_detail():
         # 大图
         img_path = get_image_display_path(fabric.get('fabric_image_path') or fabric.get('order_image_path'))
         if img_path:
-            st.image(img_path, use_container_width=True)
+            st.image(img_path, width='stretch')
 
         # 操作按钮
         st.divider()
         confirm_delete = st.checkbox("确认删除这块布料", key=f"confirm_delete_fabric_{fabric_id}")
-        if st.button("🗑️ 删除这块布料", type="secondary", use_container_width=True):
+        if st.button("🗑️ 删除这块布料", type="secondary", width='stretch'):
             if confirm_delete:
                 deleted = delete_fabric(fabric_id)
                 if deleted:
@@ -384,7 +384,7 @@ def show_fabric_detail():
 
             new_fabric_image = st.file_uploader("替换布料图片（可选）", type=['png', 'jpg', 'jpeg'])
 
-            if st.form_submit_button("💾 保存修改", use_container_width=True):
+            if st.form_submit_button("💾 保存修改", width='stretch'):
                 if not new_name:
                     st.error("布料名称不能为空")
                     return
@@ -543,7 +543,7 @@ def show_pattern_list():
     with col_b:
         view_mode = st.selectbox("📊 视图", ["网格", "列表"])
     with col_c:
-        if st.button("➕ 去添加纸样", use_container_width=True):
+        if st.button("➕ 去添加纸样", width='stretch'):
             st.session_state.page = "pattern_add"
             st.rerun()
 
@@ -559,9 +559,9 @@ def show_pattern_list():
 
                 img_path = get_image_display_path(p.get("image_path"))
                 if img_path:
-                    st.image(img_path, use_container_width=True)
+                    st.image(img_path, width='stretch')
                 else:
-                    st.image("https://via.placeholder.com/300x200?text=无图片", use_container_width=True)
+                    st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
 
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
                 if p.get("notes"):
@@ -606,9 +606,9 @@ def show_pattern_add():
 
         col_s, col_b = st.columns(2)
         with col_s:
-            submitted = st.form_submit_button("💾 保存纸样", use_container_width=True)
+            submitted = st.form_submit_button("💾 保存纸样", width='stretch')
         with col_b:
-            back = st.form_submit_button("取消并返回", use_container_width=True)
+            back = st.form_submit_button("取消并返回", width='stretch')
 
         if back:
             st.session_state.page = "pattern_list"
@@ -652,13 +652,13 @@ def show_pattern_detail():
     with col1:
         img_path = get_image_display_path(p.get("image_path"))
         if img_path:
-            st.image(img_path, use_container_width=True)
+            st.image(img_path, width='stretch')
         else:
-            st.image("https://via.placeholder.com/300x200?text=无图片", use_container_width=True)
+            st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
 
         st.divider()
         confirm_del = st.checkbox("确认删除该纸样")
-        if st.button("🗑️ 删除该纸样", type="secondary", use_container_width=True):
+        if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
                 delete_pattern(pattern_id)
                 st.success("已删除")
@@ -679,7 +679,7 @@ def show_pattern_detail():
             new_img = st.file_uploader("替换图片（可选）", type=["png", "jpg", "jpeg"])
             new_notes = st.text_area("备注", value=p.get("notes") or "")
 
-            if st.form_submit_button("保存修改", use_container_width=True):
+            if st.form_submit_button("保存修改", width='stretch'):
                 if not new_name:
                     st.error("纸样名称不能为空")
                     return
@@ -702,7 +702,7 @@ def show_size_list():
     with col_a:
         search = st.text_input("🔍 搜索档案", placeholder="输入档案名称...")
     with col_b:
-        if st.button("➕ 新增尺码档案", use_container_width=True):
+        if st.button("➕ 新增尺码档案", width='stretch'):
             st.session_state.page = "size_add"
             st.rerun()
 
@@ -751,9 +751,9 @@ def show_size_add():
 
         col_s, col_b = st.columns(2)
         with col_s:
-            submitted = st.form_submit_button("💾 保存基本信息", use_container_width=True)
+            submitted = st.form_submit_button("💾 保存基本信息", width='stretch')
         with col_b:
-            back = st.form_submit_button("取消并返回", use_container_width=True)
+            back = st.form_submit_button("取消并返回", width='stretch')
 
         if back:
             st.session_state.page = "size_list"
@@ -803,7 +803,7 @@ def show_size_detail():
 
         new_desc = st.text_area("描述", value=sp.get("description") or "")
 
-        if st.form_submit_button("保存修改", use_container_width=True):
+        if st.form_submit_button("保存修改", width='stretch'):
             if not new_name:
                 st.error("档案名称不能为空")
                 return
@@ -844,7 +844,7 @@ def sidebar():
 
         
         for page_id, page_name in pages.items():
-            if st.button(page_name, use_container_width=True):
+            if st.button(page_name, width='stretch'):
                 st.session_state.page = page_id
                 if page_id != "detail":
                     st.session_state.pop("fabric_id", None)
