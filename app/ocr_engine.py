@@ -124,6 +124,116 @@ def _build_ocr_with_fallback(PaddleOCR):
 
     raise RuntimeError('OCR初始化失败：未知错误')
 
+
+def _is_empty_json_parse_error(error):
+    """判断是否为 PaddleX 模型元数据空 JSON 导致的解析错误"""
+    message = str(error)
+    return (
+        'json.exception.parse_error.101' in message
+        or 'attempting to parse an empty input' in message
+    )
+
+
+def _cleanup_corrupted_paddlex_metadata():
+    """清理可能损坏的 PaddleX 缓存元数据文件（空文件或非法 JSON）"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists():
+        return []
+
+    removed_files = []
+    for json_file in cache_root.rglob('*.json'):
+        try:
+            if not json_file.is_file():
+                continue
+
+            # 1) 清理零字节 JSON
+            if json_file.stat().st_size == 0:
+                json_file.unlink()
+                removed_files.append(str(json_file))
+                continue
+
+            # 2) 清理内容损坏的 JSON（非空但无法解析）
+            with json_file.open('r', encoding='utf-8') as f:
+                json.load(f)
+        except json.JSONDecodeError:
+            try:
+                json_file.unlink()
+                removed_files.append(str(json_file))
+            except OSError:
+                continue
+        except OSError:
+            continue
+
+    return removed_files
+
+
+def _cleanup_corrupted_paddlex_model_dirs():
+    """在 parse_error 持续出现时，兜底删除可能损坏的模型目录。"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists():
+        return []
+
+    removed_dirs = []
+    # 目前日志中明确出现的故障模型；后续可按需扩展
+    target_dirs = [
+        cache_root / 'PP-LCNet_x1_0_doc_ori',
+    ]
+
+    import shutil
+    for model_dir in target_dirs:
+        try:
+            if model_dir.exists() and model_dir.is_dir():
+                shutil.rmtree(model_dir)
+                removed_dirs.append(str(model_dir))
+        except OSError:
+            continue
+
+    return removed_dirs
+
+
+
+
+def _purge_paddlex_official_models_cache():
+    """最后兜底：清空 entire official_models 缓存目录，强制重新下载模型。"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists() or not cache_root.is_dir():
+        return False
+
+    import shutil
+    try:
+        shutil.rmtree(cache_root)
+        return True
+    except OSError:
+        return False
+
+def _build_ocr_with_fallback(PaddleOCR):
+    """兼容不同 PaddleOCR 版本参数差异，构建 OCR 引擎"""
+    base_kwargs = {
+        'use_angle_cls': True,  # 方向分类
+        'lang': 'ch',           # 中文
+    }
+    candidate_extras = [
+        {'show_log': False, 'use_gpu': False},
+        {'show_log': False, 'device': 'cpu'},
+        {'use_gpu': False},
+        {'device': 'cpu'},
+        {},
+    ]
+
+    last_error = None
+    for extra_kwargs in candidate_extras:
+        try:
+            ocr = PaddleOCR(**base_kwargs, **extra_kwargs)
+            print(f"✅ OCR引擎初始化成功（参数: {list(extra_kwargs.keys()) or ['默认']}）")
+            return ocr
+        except Exception as init_error:
+            last_error = init_error
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError('OCR初始化失败：未知错误')
+
 def get_ocr():
     """获取OCR引擎实例（单例模式）"""
     global _ocr, _ocr_init_attempted, _ocr_init_error
