@@ -335,7 +335,7 @@ def show_fabric_detail():
         info_col1, info_col2 = st.columns(2)
         with info_col1:
             st.write(f"**店铺:** {fabric.get('shop', '-')}")
-            st.write(f"**长度:** {format_length(fabric.get('length'))}")
+            st.write(f"**剩余长度:** {format_length(fabric.get('length'))}")
             st.write(f"**幅宽:** {format_width(fabric.get('width'))}")
         with info_col2:
             st.write(f"**价格:** {format_price(fabric.get('price'))}")
