@@ -335,7 +335,7 @@ def show_fabric_detail():
         info_col1, info_col2 = st.columns(2)
         with info_col1:
             st.write(f"**店铺:** {fabric.get('shop', '-')}")
-            st.write(f"**长度:** {format_length(fabric.get('length'))}")
+            st.write(f"**剩余长度:** {format_length(fabric.get('length'))}")
             st.write(f"**幅宽:** {format_width(fabric.get('width'))}")
         with info_col2:
             st.write(f"**价格:** {format_price(fabric.get('price'))}")
@@ -358,6 +358,7 @@ def show_fabric_detail():
                     with col_g2:
                         st.write(f"**{garment.get('name', '未命名作品')}**")
                         st.write(f"制作日期: {format_date(garment.get('made_date'))}")
+                        st.write(f"使用布长: {format_length(garment.get('used_length'))}")
                         if garment.get('notes'):
                             st.write(f"备注: {garment['notes']}")
                         if st.button("删除", key=f"del_g_{garment['id']}"):
@@ -379,22 +380,39 @@ def show_fabric_detail():
                 g_image = st.file_uploader("成衣照片", type=['png', 'jpg', 'jpeg'])
                 g_date = st.date_input("制作日期", datetime.now())
                 g_notes = st.text_area("备注")
+                g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
                 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
                     if st.form_submit_button("💾 保存"):
                         if g_image:
+                            remaining_length = fabric.get('length')
+                            if g_used_length <= 0:
+                                st.error("请输入有效的使用布长（需大于 0）")
+                                return
+                            if remaining_length is None:
+                                st.error("该布料没有可用的剩余长度，无法扣减")
+                                return
+                            if g_used_length > remaining_length:
+                                st.error("使用布长不能超过当前剩余长度")
+                                return
+
                             # 保存图片
                             img_path = save_uploaded_file(g_image, "garment_images")
                             compressed = compress_image(img_path)
-                            
-                            add_garment(
-                                fabric_id=fabric_id,
-                                name=g_name or None,
-                                image_path=compressed,
-                                made_date=g_date.isoformat(),
-                                notes=g_notes or None
-                            )
+
+                            try:
+                                add_garment(
+                                    fabric_id=fabric_id,
+                                    name=g_name or None,
+                                    image_path=compressed,
+                                    made_date=g_date.isoformat(),
+                                    notes=g_notes or None,
+                                    used_length=g_used_length
+                                )
+                            except ValueError as e:
+                                st.error(str(e))
+                                return
                             
                             st.success("✅ 成衣记录已添加")
                             st.session_state.show_add_garment = False

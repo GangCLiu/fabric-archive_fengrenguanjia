@@ -42,10 +42,17 @@ def init_database():
             image_path TEXT NOT NULL,
             made_date DATE,
             notes TEXT,
+            used_length REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE
         )
     """)
+
+    # 兼容历史数据库：如果缺少 used_length 字段则补充
+    cursor.execute("PRAGMA table_info(garments)")
+    garment_columns = {row[1] for row in cursor.fetchall()}
+    if "used_length" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -176,20 +183,49 @@ def delete_fabric(fabric_id):
     return True
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None):
+def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
-    cursor.execute("""
-        INSERT INTO garments (fabric_id, name, image_path, made_date, notes)
-        VALUES (?, ?, ?, ?, ?)
-    """, (fabric_id, name, image_path, made_date, notes))
-    
-    garment_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return garment_id
+
+    try:
+        cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("布料不存在")
+
+        current_length = row[0]
+
+        if used_length is None:
+            used_length = 0
+
+        if used_length < 0:
+            raise ValueError("使用布长不能为负数")
+
+        if current_length is None:
+            raise ValueError("该布料没有可扣减的剩余长度")
+
+        if used_length > current_length:
+            raise ValueError("使用布长不能超过当前剩余长度")
+
+        cursor.execute(
+            "UPDATE fabrics SET length = length - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (used_length, fabric_id)
+        )
+
+        cursor.execute("""
+            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (fabric_id, name, image_path, made_date, notes, used_length))
+
+        garment_id = cursor.lastrowid
+        conn.commit()
+        return garment_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def delete_garment(garment_id):
@@ -422,8 +458,8 @@ def import_from_json(data):
         # 导入成衣
         for garment in data.get("garments", []):
             cursor.execute("""
-                INSERT INTO garments (id, fabric_id, name, image_path, made_date, notes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO garments (id, fabric_id, name, image_path, made_date, notes, used_length, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
@@ -431,6 +467,7 @@ def import_from_json(data):
                 garment.get("image_path"),
                 garment.get("made_date"),
                 garment.get("notes"),
+                garment.get("used_length"),
                 garment.get("created_at")
             ))
 
