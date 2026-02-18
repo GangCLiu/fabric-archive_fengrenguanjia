@@ -1,0 +1,60 @@
+# 数据文件
+data/order_images/*
+data/fabric_images/*
+data/garment_images/*
+!data/.gitkeep
+!data/order_images/.gitkeep
+!data/fabric_images/.gitkeep
+!data/garment_images/.gitkeep
+
+# 数据库
+data/*.db
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python 虚拟环境
+.venv/
+
+# Python 字节码缓存
+__pycache__/
+**/__pycache__/
+
+# 字节码文件
+*.pyc
+*.pyo
+*.pyd
