@@ -79,6 +79,21 @@ def _cleanup_corrupted_paddlex_model_dirs():
     return removed_dirs
 
 
+
+
+def _purge_paddlex_official_models_cache():
+    """最后兜底：清空 entire official_models 缓存目录，强制重新下载模型。"""
+    cache_root = Path.home() / '.paddlex' / 'official_models'
+    if not cache_root.exists() or not cache_root.is_dir():
+        return False
+
+    import shutil
+    try:
+        shutil.rmtree(cache_root)
+        return True
+    except OSError:
+        return False
+
 def _build_ocr_with_fallback(PaddleOCR):
     """兼容不同 PaddleOCR 版本参数差异，构建 OCR 引擎"""
     base_kwargs = {
@@ -132,7 +147,17 @@ def get_ocr():
                     if removed_dirs:
                         print(f"⚠️ 已清理可能损坏的模型目录 {len(removed_dirs)} 个，正在重试初始化...")
 
-                _ocr = _build_ocr_with_fallback(PaddleOCR)
+                try:
+                    _ocr = _build_ocr_with_fallback(PaddleOCR)
+                except Exception as retry_error:
+                    if not _is_empty_json_parse_error(retry_error):
+                        raise
+
+                    print("⚠️ OCR 仍因 JSON 解析失败，尝试清空 PaddleX official_models 缓存后最后重试一次...")
+                    purged = _purge_paddlex_official_models_cache()
+                    if purged:
+                        print("⚠️ 已清空 official_models 缓存目录，准备重新下载模型。")
+                    _ocr = _build_ocr_with_fallback(PaddleOCR)
         except Exception as e:
             print(f"❌ OCR初始化失败: {e}")
             raise
