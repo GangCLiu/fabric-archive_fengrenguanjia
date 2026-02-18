@@ -3,14 +3,13 @@
 专为缝纫爱好者设计的布料管理系统
 
 ## 功能
-- AI识别订单信息
+- 图片上传与手动录入
 - 布料档案管理
 - 成衣作品关联
 - 数据GitHub备份
 
 ## 技术栈
 - Python + Streamlit
-- PaddleOCR
 - SQLite
 
 ## 安装
