@@ -89,7 +89,9 @@ def format_length(length):
     """格式化长度显示"""
     if length is None:
         return "-"
-    return f"{length}米"
+    value = round(float(length), 3)
+    text = f"{value:.3f}".rstrip('0').rstrip('.')
+    return f"{text}米"
 
 
 def format_width(width):

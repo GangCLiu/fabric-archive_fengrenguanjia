@@ -93,8 +93,8 @@ def show_home():
     
     st.divider()
     
-    # 搜索和筛选
-    col_search, col_shop, col_view = st.columns([3, 2, 1])
+    # 搜索、筛选与快捷添加
+    col_search, col_shop, col_view, col_add = st.columns([3, 2, 1, 2])
     
     with col_search:
         search = st.text_input("🔍 搜索布料", placeholder="输入名称或店铺...")
@@ -105,6 +105,12 @@ def show_home():
     
     with col_view:
         view_mode = st.selectbox("📊 视图", ["网格", "列表"])
+
+    with col_add:
+        st.write("")
+        if st.button("➕ 去添加布料", use_container_width=True):
+            st.session_state.page = "add"
+            st.rerun()
     
     # 获取筛选后的布料
     shop_filter = None if selected_shop == "全部" else selected_shop
@@ -331,11 +337,22 @@ def show_fabric_detail():
     with col2:
         # 信息卡片
         st.subheader("📋 布料信息")
+        garments = fabric.get('garments', [])
+        has_garments = len(garments) > 0
+        remaining_length = fabric.get('length')
+        original_length = fabric.get('original_length')
+        if original_length is None:
+            original_length = remaining_length
+
+        if has_garments and original_length is not None:
+            length_display = f"{format_length(remaining_length)} / {format_length(original_length)}"
+        else:
+            length_display = format_length(original_length)
         
         info_col1, info_col2 = st.columns(2)
         with info_col1:
             st.write(f"**店铺:** {fabric.get('shop', '-')}")
-            st.write(f"**长度:** {format_length(fabric.get('length'))}")
+            st.write(f"**剩余长度:** {length_display}")
             st.write(f"**幅宽:** {format_width(fabric.get('width'))}")
         with info_col2:
             st.write(f"**价格:** {format_price(fabric.get('price'))}")
@@ -346,7 +363,6 @@ def show_fabric_detail():
         # 成衣作品
         st.subheader("👗 成衣作品")
         
-        garments = fabric.get('garments', [])
         if garments:
             for garment in garments:
                 with st.container():
@@ -358,6 +374,8 @@ def show_fabric_detail():
                     with col_g2:
                         st.write(f"**{garment.get('name', '未命名作品')}**")
                         st.write(f"制作日期: {format_date(garment.get('made_date'))}")
+                        if garment.get('used_length') is not None:
+                            st.write(f"使用布长: {format_length(garment.get('used_length'))}")
                         if garment.get('notes'):
                             st.write(f"备注: {garment['notes']}")
                         if st.button("删除", key=f"del_g_{garment['id']}"):
@@ -378,27 +396,32 @@ def show_fabric_detail():
                 g_name = st.text_input("作品名称")
                 g_image = st.file_uploader("成衣照片", type=['png', 'jpg', 'jpeg'])
                 g_date = st.date_input("制作日期", datetime.now())
+                g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
                 g_notes = st.text_area("备注")
                 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
                     if st.form_submit_button("💾 保存"):
                         if g_image:
-                            # 保存图片
-                            img_path = save_uploaded_file(g_image, "garment_images")
-                            compressed = compress_image(img_path)
-                            
-                            add_garment(
-                                fabric_id=fabric_id,
-                                name=g_name or None,
-                                image_path=compressed,
-                                made_date=g_date.isoformat(),
-                                notes=g_notes or None
-                            )
-                            
-                            st.success("✅ 成衣记录已添加")
-                            st.session_state.show_add_garment = False
-                            st.rerun()
+                            try:
+                                # 保存图片
+                                img_path = save_uploaded_file(g_image, "garment_images")
+                                compressed = compress_image(img_path)
+                                
+                                add_garment(
+                                    fabric_id=fabric_id,
+                                    name=g_name or None,
+                                    image_path=compressed,
+                                    made_date=g_date.isoformat(),
+                                    used_length=g_used_length,
+                                    notes=g_notes or None
+                                )
+                                
+                                st.success("✅ 成衣记录已添加")
+                                st.session_state.show_add_garment = False
+                                st.rerun()
+                            except ValueError as e:
+                                st.error(str(e))
                         else:
                             st.error("请上传成衣照片")
                 
@@ -746,10 +769,7 @@ def sidebar():
         # 导航
         pages = {
             "home": "📦 布料列表",
-            "add": "➕ 添加布料",
-
             "pattern_list": "📄 纸样列表",
-            "pattern_add": "➕ 添加纸样",
             "size_list": "📐 尺码档案",
 
             "backup": "💾 数据备份"
@@ -773,7 +793,7 @@ def sidebar():
         st.divider()
         st.caption("📝 使用说明")
         st.info("""
-        1. 点击"添加布料"上传订单截图
+        1. 在布料列表页点击"去添加布料"上传订单截图
         2. AI自动识别信息，可手动修正
         3. 在详情页添加成衣作品
         4. 定期备份数据到GitHub

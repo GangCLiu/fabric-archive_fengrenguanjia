@@ -6,8 +6,24 @@ import sqlite3
 import json
 from datetime import datetime
 from pathlib import Path
+from decimal import Decimal, ROUND_HALF_UP
 
 DATABASE_PATH = Path(__file__).parent.parent / "data" / "fabric_archive.db"
+
+
+LENGTH_STEP = Decimal("0.001")
+
+
+def _normalize_length(value):
+    """统一长度精度，避免浮点误差展示与累计问题。"""
+    if value is None:
+        return None
+    return float(Decimal(str(value)).quantize(LENGTH_STEP, rounding=ROUND_HALF_UP))
+
+
+def _column_exists(cursor, table, column):
+    cursor.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cursor.fetchall())
 
 
 def init_database():
@@ -23,6 +39,7 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             length REAL,
+            original_length REAL,
             width INTEGER,
             shop TEXT,
             price REAL,
@@ -41,11 +58,19 @@ def init_database():
             name TEXT,
             image_path TEXT NOT NULL,
             made_date DATE,
+            used_length REAL,
             notes TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE
         )
     """)
+
+    # 兼容历史数据库
+    if not _column_exists(cursor, "fabrics", "original_length"):
+        cursor.execute("ALTER TABLE fabrics ADD COLUMN original_length REAL")
+    if not _column_exists(cursor, "garments", "used_length"):
+        cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    cursor.execute("UPDATE fabrics SET original_length = length WHERE original_length IS NULL")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -82,10 +107,11 @@ def add_fabric(name, length=None, width=None, shop=None, price=None,
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     
+    normalized_length = _normalize_length(length)
     cursor.execute("""
-        INSERT INTO fabrics (name, length, width, shop, price, fabric_image_path, order_image_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (name, length, width, shop, price, fabric_image_path, order_image_path))
+        INSERT INTO fabrics (name, length, original_length, width, shop, price, fabric_image_path, order_image_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (name, normalized_length, normalized_length, width, shop, price, fabric_image_path, order_image_path))
     
     fabric_id = cursor.lastrowid
     conn.commit()
@@ -147,8 +173,12 @@ def get_fabric_by_id(fabric_id):
 
 def update_fabric(fabric_id, **kwargs):
     """更新布料信息"""
-    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path']
+    allowed_fields = ['name', 'length', 'original_length', 'width', 'shop', 'price', 'fabric_image_path']
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    if 'length' in updates:
+        updates['length'] = _normalize_length(updates['length'])
+    if 'original_length' in updates:
+        updates['original_length'] = _normalize_length(updates['original_length'])
     
     if not updates:
         return False
@@ -176,15 +206,39 @@ def delete_fabric(fabric_id):
     return True
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None):
+def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
+    normalized_used = _normalize_length(used_length)
+
+    if normalized_used is not None and normalized_used < 0:
+        conn.close()
+        raise ValueError("使用布长不能小于0")
+
+    cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("布料不存在")
+
+    current_length = row[0] if row[0] is not None else 0
+    current_length_dec = Decimal(str(current_length))
+    used_dec = Decimal(str(normalized_used or 0))
+    if used_dec > current_length_dec:
+        conn.close()
+        raise ValueError("使用布长超过剩余长度")
+
+    remaining = float((current_length_dec - used_dec).quantize(LENGTH_STEP, rounding=ROUND_HALF_UP))
     
+    cursor.execute(
+        "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (remaining, fabric_id)
+    )
     cursor.execute("""
-        INSERT INTO garments (fabric_id, name, image_path, made_date, notes)
-        VALUES (?, ?, ?, ?, ?)
-    """, (fabric_id, name, image_path, made_date, notes))
+        INSERT INTO garments (fabric_id, name, image_path, made_date, used_length, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (fabric_id, name, image_path, made_date, normalized_used, notes))
     
     garment_id = cursor.lastrowid
     conn.commit()
@@ -196,6 +250,23 @@ def delete_garment(garment_id):
     """删除成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
+
+    cursor.execute("SELECT fabric_id, used_length FROM garments WHERE id = ?", (garment_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    fabric_id, used_length = row
+
+    if used_length:
+        cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+        fabric_row = cursor.fetchone()
+        current_length = fabric_row[0] if fabric_row and fabric_row[0] is not None else 0
+        restored = float((Decimal(str(current_length)) + Decimal(str(used_length))).quantize(LENGTH_STEP, rounding=ROUND_HALF_UP))
+        cursor.execute(
+            "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (restored, fabric_id)
+        )
     
     cursor.execute("DELETE FROM garments WHERE id = ?", (garment_id,))
     conn.commit()
@@ -403,13 +474,14 @@ def import_from_json(data):
         # 导入布料
         for fabric in data.get("fabrics", []):
             cursor.execute("""
-                INSERT INTO fabrics (id, name, length, width, shop, price, 
+                INSERT INTO fabrics (id, name, length, original_length, width, shop, price, 
                     fabric_image_path, order_image_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 fabric.get("id"),
                 fabric.get("name"),
-                fabric.get("length"),
+                _normalize_length(fabric.get("length")),
+                _normalize_length(fabric.get("original_length") if fabric.get("original_length") is not None else fabric.get("length")),
                 fabric.get("width"),
                 fabric.get("shop"),
                 fabric.get("price"),
@@ -422,14 +494,15 @@ def import_from_json(data):
         # 导入成衣
         for garment in data.get("garments", []):
             cursor.execute("""
-                INSERT INTO garments (id, fabric_id, name, image_path, made_date, notes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO garments (id, fabric_id, name, image_path, made_date, used_length, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
                 garment.get("name"),
                 garment.get("image_path"),
                 garment.get("made_date"),
+                _normalize_length(garment.get("used_length")),
                 garment.get("notes"),
                 garment.get("created_at")
             ))
