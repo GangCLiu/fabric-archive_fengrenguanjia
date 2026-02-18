@@ -176,52 +176,62 @@ def show_home():
 
 def show_add_fabric():
     """添加新布料"""
-    st.header("➕ 添加新布料")
+    title_col, action_col = st.columns([5, 1])
+    with title_col:
+        st.header("➕ 添加新布料")
+    with action_col:
+        st.write("")
+        if st.button("取消并返回", use_container_width=True):
+            for key in ["ocr_result", "last_uploaded", "temp_image_path"]:
+                st.session_state.pop(key, None)
+            st.session_state.page = "home"
+            st.rerun()
+
     st.info("📸 上传淘宝/小红书订单截图，AI自动识别信息")
-    
+
     uploaded_file = st.file_uploader("上传订单截图", type=['png', 'jpg', 'jpeg'])
-    
+
     if uploaded_file:
         # 显示预览
         st.image(uploaded_file, caption="订单截图预览", use_container_width=True)
-        
+
         # 初始化表单数据
         if 'ocr_result' not in st.session_state or st.session_state.get('last_uploaded') != uploaded_file.name:
             with st.spinner("🔍 正在识别订单信息..."):
                 # 保存临时文件
                 temp_path = save_uploaded_file(uploaded_file, "temp")
-                
+
                 # OCR识别
                 result = recognize_image(temp_path)
                 st.session_state.ocr_result = result
                 st.session_state.last_uploaded = uploaded_file.name
                 st.session_state.temp_image_path = temp_path
-        
+
         result = st.session_state.ocr_result
-        
+
         if result['success']:
             extracted = result['extracted']
-            
+
             st.subheader("📝 识别结果（可编辑）")
-            
+
             # 表单
             with st.form("fabric_form"):
                 name = st.text_input("布料名称 *", value=extracted.get('name') or "")
-                
+
                 col1, col2 = st.columns(2)
                 with col1:
                     length = st.number_input("长度（米）", value=extracted.get('length') or 0.0, min_value=0.0, step=0.1)
                 with col2:
                     width = st.number_input("幅宽（cm）", value=extracted.get('width') or 0, min_value=0, step=5)
-                
+
                 col3, col4 = st.columns(2)
                 with col3:
                     shop = st.text_input("店铺名", value=extracted.get('shop') or "")
                 with col4:
                     price = st.number_input("价格（元）", value=extracted.get('price') or 0.0, min_value=0.0, step=0.01)
-                
+
                 submitted = st.form_submit_button("💾 保存布料", use_container_width=True)
-                
+
                 if submitted:
                     if not name:
                         st.error("请填写布料名称")
@@ -229,12 +239,12 @@ def show_add_fabric():
                         # 压缩并保存图片
                         temp_path = st.session_state.temp_image_path
                         compressed_path = compress_image(temp_path)
-                        
+
                         # 保存到正式目录
                         import shutil
                         final_path = Path("data/order_images") / Path(compressed_path).name
                         shutil.move(compressed_path, final_path)
-                        
+
                         # 添加到数据库
                         fabric_id = add_fabric(
                             name=name,
@@ -244,21 +254,20 @@ def show_add_fabric():
                             price=price if price > 0 else None,
                             order_image_path=str(final_path)
                         )
-                        
+
                         st.success(f"✅ 布料已保存！ID: {fabric_id}")
-                        
+
                         # 清理session
-                        del st.session_state.ocr_result
-                        del st.session_state.last_uploaded
-                        del st.session_state.temp_image_path
-                        
+                        for key in ["ocr_result", "last_uploaded", "temp_image_path"]:
+                            st.session_state.pop(key, None)
+
                         # 返回首页
                         st.session_state.page = "home"
                         st.rerun()
         else:
             st.error(f"❌ 识别失败: {result.get('error', '未知错误')}")
             st.info("提示：你也可以手动填写信息保存")
-            
+
             # 手动填写表单
             with st.form("manual_fabric_form"):
                 name = st.text_input("布料名称 *")
@@ -267,15 +276,15 @@ def show_add_fabric():
                     length = st.number_input("长度（米）", min_value=0.0, step=0.1)
                 with col2:
                     width = st.number_input("幅宽（cm）", min_value=0, step=5)
-                
+
                 col3, col4 = st.columns(2)
                 with col3:
                     shop = st.text_input("店铺名")
                 with col4:
                     price = st.number_input("价格（元）", min_value=0.0, step=0.01)
-                
+
                 submitted = st.form_submit_button("💾 保存布料")
-                
+
                 if submitted and name:
                     # 保存图片
                     temp_path = st.session_state.temp_image_path
@@ -283,7 +292,7 @@ def show_add_fabric():
                     final_path = Path("data/order_images") / Path(compressed_path).name
                     import shutil
                     shutil.move(compressed_path, final_path)
-                    
+
                     fabric_id = add_fabric(
                         name=name,
                         length=length if length > 0 else None,
@@ -292,11 +301,12 @@ def show_add_fabric():
                         price=price if price > 0 else None,
                         order_image_path=str(final_path)
                     )
-                    
+
                     st.success(f"✅ 布料已保存！ID: {fabric_id}")
+                    for key in ["ocr_result", "last_uploaded", "temp_image_path"]:
+                        st.session_state.pop(key, None)
                     st.session_state.page = "home"
                     st.rerun()
-
 
 def show_fabric_detail():
     """布料详情页"""
@@ -304,40 +314,48 @@ def show_fabric_detail():
     if not fabric_id:
         st.error("未指定布料ID")
         return
-    
+
     fabric = get_fabric_by_id(fabric_id)
     if not fabric:
         st.error("布料不存在")
         return
-    
+
     # 返回按钮
     if st.button("← 返回列表"):
         st.session_state.page = "home"
         st.rerun()
-    
+
     st.header(f"🧵 {fabric['name']}")
-    
+
     col1, col2 = st.columns([1, 2])
-    
+
     with col1:
         # 大图
         img_path = get_image_display_path(fabric.get('fabric_image_path') or fabric.get('order_image_path'))
         if img_path:
             st.image(img_path, use_container_width=True)
-        
+
         # 操作按钮
         st.divider()
-        if st.button("🗑️ 删除这块布料", type="secondary"):
-            if st.checkbox("确认删除？"):
-                delete_fabric(fabric_id)
-                st.success("已删除")
+        confirm_delete = st.checkbox("确认删除这块布料", key=f"confirm_delete_fabric_{fabric_id}")
+        if st.button("🗑️ 删除这块布料", type="secondary", use_container_width=True):
+            if confirm_delete:
+                deleted = delete_fabric(fabric_id)
+                if deleted:
+                    st.success("已删除")
+                else:
+                    st.warning("该布料不存在或已删除")
                 st.session_state.page = "home"
+                st.session_state.pop("fabric_id", None)
+                st.session_state.pop("show_add_garment", None)
                 st.rerun()
-    
+            else:
+                st.error("请先勾选确认删除")
+
     with col2:
         # 信息卡片
         st.subheader("📋 布料信息")
-        
+
         info_col1, info_col2 = st.columns(2)
         with info_col1:
             st.write(f"**店铺:** {fabric.get('shop', '-')}")
@@ -346,12 +364,57 @@ def show_fabric_detail():
         with info_col2:
             st.write(f"**价格:** {format_price(fabric.get('price'))}")
             st.write(f"**录入时间:** {format_date(fabric.get('created_at'))}")
-        
+
         st.divider()
-        
+        st.subheader("✏️ 编辑布料信息")
+        with st.form("fabric_edit_form"):
+            new_name = st.text_input("布料名称 *", value=fabric.get('name') or "")
+
+            edit_col1, edit_col2 = st.columns(2)
+            with edit_col1:
+                new_length = st.number_input("原长（米）", min_value=0.0, step=0.1, value=float(fabric.get('length') or 0.0))
+            with edit_col2:
+                new_width = st.number_input("幅宽（cm）", min_value=0, step=5, value=int(fabric.get('width') or 0))
+
+            edit_col3, edit_col4 = st.columns(2)
+            with edit_col3:
+                new_shop = st.text_input("店铺名", value=fabric.get('shop') or "")
+            with edit_col4:
+                new_price = st.number_input("价格（元）", min_value=0.0, step=0.01, value=float(fabric.get('price') or 0.0))
+
+            new_fabric_image = st.file_uploader("替换布料图片（可选）", type=['png', 'jpg', 'jpeg'])
+
+            if st.form_submit_button("💾 保存修改", use_container_width=True):
+                if not new_name:
+                    st.error("布料名称不能为空")
+                    return
+
+                image_path = fabric.get('fabric_image_path')
+                if new_fabric_image:
+                    raw_path = save_uploaded_file(new_fabric_image, "fabric_images")
+                    image_path = compress_image(raw_path)
+
+                changed = update_fabric(
+                    fabric_id,
+                    name=new_name,
+                    length=new_length if new_length > 0 else None,
+                    width=int(new_width) if new_width > 0 else None,
+                    shop=new_shop or None,
+                    price=new_price if new_price > 0 else None,
+                    fabric_image_path=image_path
+                )
+
+                if changed:
+                    st.success("✅ 布料信息已更新")
+                else:
+                    st.warning("未检测到可更新的内容")
+                st.rerun()
+
+        st.divider()
+
         # 成衣作品
         st.subheader("👗 成衣作品")
-        
+
         garments = fabric.get('garments', [])
         if garments:
             for garment in garments:
@@ -373,11 +436,11 @@ def show_fabric_detail():
                     st.divider()
         else:
             st.info("还没有成衣记录，点击下方按钮添加")
-        
+
         # 添加成衣按钮
         if st.button("➕ 添加成衣作品"):
             st.session_state.show_add_garment = True
-        
+
         # 添加成衣表单
         if st.session_state.get('show_add_garment'):
             with st.form("add_garment_form"):
@@ -387,7 +450,7 @@ def show_fabric_detail():
                 g_date = st.date_input("制作日期", datetime.now())
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
-                
+
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
                     if st.form_submit_button("💾 保存"):
@@ -419,18 +482,17 @@ def show_fabric_detail():
                             except ValueError as e:
                                 st.error(str(e))
                                 return
-                            
+
                             st.success("✅ 成衣记录已添加")
                             st.session_state.show_add_garment = False
                             st.rerun()
                         else:
                             st.error("请上传成衣照片")
-                
+
                 with col_cancel:
                     if st.form_submit_button("取消"):
                         st.session_state.show_add_garment = False
                         st.rerun()
-
 
 def show_backup():
     """数据备份页面"""
