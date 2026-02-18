@@ -372,7 +372,7 @@ def show_fabric_detail():
 
             edit_col1, edit_col2 = st.columns(2)
             with edit_col1:
-                new_length = st.number_input("原长（米）", min_value=0.0, step=0.1, value=float(fabric.get('length') or 0.0))
+                new_length = st.number_input("原长（米）", min_value=0.0, step=0.1, value=float(fabric.get('original_length') or fabric.get('length') or 0.0))
             with edit_col2:
                 new_width = st.number_input("幅宽（cm）", min_value=0, step=5, value=int(fabric.get('width') or 0))
 
@@ -394,15 +394,19 @@ def show_fabric_detail():
                     raw_path = save_uploaded_file(new_fabric_image, "fabric_images")
                     image_path = compress_image(raw_path)
 
-                changed = update_fabric(
-                    fabric_id,
-                    name=new_name,
-                    length=new_length if new_length > 0 else None,
-                    width=int(new_width) if new_width > 0 else None,
-                    shop=new_shop or None,
-                    price=new_price if new_price > 0 else None,
-                    fabric_image_path=image_path
-                )
+                try:
+                    changed = update_fabric(
+                        fabric_id,
+                        name=new_name,
+                        original_length=new_length if new_length > 0 else None,
+                        width=int(new_width) if new_width > 0 else None,
+                        shop=new_shop or None,
+                        price=new_price if new_price > 0 else None,
+                        fabric_image_path=image_path
+                    )
+                except ValueError as e:
+                    st.error(str(e))
+                    return
 
                 if changed:
                     st.success("✅ 布料信息已更新")

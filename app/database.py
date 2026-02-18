@@ -29,6 +29,7 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             length REAL,
+            original_length REAL,
             width INTEGER,
             shop TEXT,
             price REAL,
@@ -39,6 +40,13 @@ def init_database():
         )
     """)
     
+    # 兼容历史数据库：补充 original_length 字段并回填
+    cursor.execute("PRAGMA table_info(fabrics)")
+    fabric_columns = {row[1] for row in cursor.fetchall()}
+    if "original_length" not in fabric_columns:
+        cursor.execute("ALTER TABLE fabrics ADD COLUMN original_length REAL")
+    cursor.execute("UPDATE fabrics SET original_length = length WHERE original_length IS NULL")
+
     # 成衣表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS garments (
@@ -94,12 +102,14 @@ def add_fabric(name, length=None, width=None, shop=None, price=None,
     """添加新布料"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    
+
+    normalized_length = float(_normalize_length(length)) if length is not None else None
+
     cursor.execute("""
-        INSERT INTO fabrics (name, length, width, shop, price, fabric_image_path, order_image_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (name, length, width, shop, price, fabric_image_path, order_image_path))
-    
+        INSERT INTO fabrics (name, length, original_length, width, shop, price, fabric_image_path, order_image_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (name, normalized_length, normalized_length, width, shop, price, fabric_image_path, order_image_path))
+
     fabric_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -160,26 +170,51 @@ def get_fabric_by_id(fabric_id):
 
 def update_fabric(fabric_id, **kwargs):
     """更新布料信息"""
-    allowed_fields = ['name', 'length', 'width', 'shop', 'price', 'fabric_image_path', 'order_image_path']
+    allowed_fields = ['name', 'original_length', 'width', 'shop', 'price', 'fabric_image_path', 'order_image_path']
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
 
     if not updates:
         return False
 
-    if 'length' in updates and updates['length'] is not None:
-        updates['length'] = float(_normalize_length(updates['length']))
-
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
 
-    set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
-    values = list(updates.values()) + [fabric_id]
+    try:
+        cursor.execute("SELECT original_length, length FROM fabrics WHERE id = ?", (fabric_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
 
-    cursor.execute(f"UPDATE fabrics SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
-    conn.commit()
-    changed = cursor.rowcount > 0
-    conn.close()
-    return changed
+        current_original, current_remaining = row
+
+        if 'original_length' in updates:
+            new_original = updates['original_length']
+            if new_original is None:
+                raise ValueError("原长不能为空")
+
+            new_original_dec = _normalize_length(new_original)
+            current_original_dec = _normalize_length(current_original) if current_original is not None else _normalize_length(current_remaining or 0)
+            current_remaining_dec = _normalize_length(current_remaining) if current_remaining is not None else _normalize_length(0)
+            used_length_dec = _normalize_length(current_original_dec - current_remaining_dec)
+
+            new_remaining_dec = _normalize_length(new_original_dec - used_length_dec)
+            if new_remaining_dec < 0:
+                raise ValueError("原长不能小于已使用布长")
+
+            updates['original_length'] = float(new_original_dec)
+            updates['length'] = float(new_remaining_dec)
+
+        set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+        values = list(updates.values()) + [fabric_id]
+
+        cursor.execute(f"UPDATE fabrics SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def delete_fabric(fabric_id):
