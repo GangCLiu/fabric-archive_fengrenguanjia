@@ -619,8 +619,24 @@ def get_pattern_by_id(pattern_id):
         WHERE p.id = ?
     """, (pattern_id,))
     row = cursor.fetchone()
+
+    garment_names = []
+    if row:
+        cursor.execute("""
+            SELECT COALESCE(NULLIF(TRIM(name), ''), '未命名成衣') AS garment_name
+            FROM garments
+            WHERE pattern_id = ?
+            ORDER BY created_at DESC, id DESC
+        """, (pattern_id,))
+        garment_names = [r["garment_name"] for r in cursor.fetchall()]
+
     conn.close()
-    return dict(row) if row else None
+    if not row:
+        return None
+
+    pattern = dict(row)
+    pattern["garment_names"] = garment_names
+    return pattern
 
 
 def update_pattern(pattern_id, **kwargs):

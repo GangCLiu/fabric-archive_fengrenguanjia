@@ -801,6 +801,14 @@ def show_pattern_detail():
         st.write(f"录入时间: {format_date(p.get('created_at'))}")
         st.write(f"被使用 {p.get('usage_count', 0)} 次")
 
+        garment_names = p.get("garment_names") or []
+        st.write("使用该纸样的成衣名称列表：")
+        if garment_names:
+            for idx, garment_name in enumerate(garment_names, start=1):
+                st.write(f"{idx}. {garment_name}")
+        else:
+            st.write("暂无")
+
         st.divider()
         st.subheader("✏️ 编辑")
         with st.form("pattern_edit_form"):
