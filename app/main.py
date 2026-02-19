@@ -361,6 +361,8 @@ def show_fabric_detail():
                         st.write(f"**{garment.get('name', '未命名作品')}**")
                         st.write(f"制作日期: {format_date(garment.get('made_date'))}")
                         st.write(f"使用布长: {format_length(garment.get('used_length'))}")
+                        st.write(f"所用布料: {garment.get('used_fabric_name') or fabric.get('name') or '-'}")
+                        st.write(f"所用纸样: {garment.get('pattern_display_name') or '其他'}")
                         if garment.get('notes'):
                             st.write(f"备注: {garment['notes']}")
                         if st.button("删除", key=f"del_g_{garment['id']}"):
@@ -381,6 +383,14 @@ def show_fabric_detail():
 
         # 添加成衣表单
         if st.session_state.get('show_add_garment'):
+            all_fabrics = get_all_fabrics()
+            all_patterns = get_all_patterns()
+            fabric_name_options = [f.get('name') for f in all_fabrics if f.get('name')]
+            if "其他" not in fabric_name_options:
+                fabric_name_options.append("其他")
+            pattern_options = [(None, "其他")] + [(p.get('id'), p.get('name')) for p in all_patterns if p.get('name')]
+            pattern_labels = [label for _, label in pattern_options]
+
             with st.form("add_garment_form"):
                 st.write("**新增成衣**")
                 g_name = st.text_input("作品名称")
@@ -392,6 +402,13 @@ def show_fabric_detail():
                 pattern_name = st.selectbox("关联纸样", list(pattern_options.keys()))
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
+                selected_fabric_name = st.selectbox("所用布料 *", options=fabric_name_options)
+                custom_fabric_name = None
+                if selected_fabric_name == "其他":
+                    custom_fabric_name = st.text_input("请填写所用布料名称 *")
+
+                selected_pattern_label = st.selectbox("所用纸样", options=pattern_labels, index=0)
+                selected_pattern_id = next((pid for pid, label in pattern_options if label == selected_pattern_label), None)
 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
@@ -431,6 +448,47 @@ def show_fabric_detail():
                             st.rerun()
                         else:
                             st.error("请上传成衣照片")
+                            return
+
+                        if selected_fabric_name == "其他" and not (custom_fabric_name or "").strip():
+                            st.error("请选择所用布料或填写“其他”布料名称")
+                            return
+
+                        used_fabric_name = (custom_fabric_name or "").strip() if selected_fabric_name == "其他" else selected_fabric_name
+                        remaining_length = fabric.get('length')
+                        if g_used_length <= 0:
+                            st.error("请输入有效的使用布长（需大于 0）")
+                            return
+                        if remaining_length is None:
+                            st.error("该布料没有可用的剩余长度，无法扣减")
+                            return
+                        if g_used_length > remaining_length:
+                            st.error("使用布长不能超过当前剩余长度")
+                            return
+
+                        # 保存图片
+                        img_path = save_uploaded_file(g_image, "garment_images")
+                        compressed = compress_image(img_path)
+
+                        try:
+                            add_garment(
+                                fabric_id=fabric_id,
+                                name=g_name or None,
+                                image_path=compressed,
+                                made_date=g_date.isoformat(),
+                                notes=g_notes or None,
+                                used_length=g_used_length,
+                                used_fabric_name=used_fabric_name,
+                                pattern_id=selected_pattern_id,
+                                pattern_name_snapshot=selected_pattern_label if selected_pattern_id else None,
+                            )
+                        except ValueError as e:
+                            st.error(str(e))
+                            return
+
+                        st.success("✅ 成衣记录已添加")
+                        st.session_state.show_add_garment = False
+                        st.rerun()
 
                 with col_cancel:
                     if st.form_submit_button("取消"):
@@ -545,6 +603,7 @@ def show_pattern_list():
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
                 if p.get("notes"):
                     st.write(p["notes"][:60] + "..." if len(p["notes"]) > 60 else p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
 
                 if st.button("查看详情", key=f"pat_view_{p['id']}"):
@@ -564,6 +623,7 @@ def show_pattern_list():
                 st.write(f"**{p['name']}**")
                 if p.get("notes"):
                     st.write(p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
             with col3:
                 if st.button("详情", key=f"pat_list_view_{p['id']}"):
@@ -639,17 +699,21 @@ def show_pattern_detail():
         confirm_del = st.checkbox("确认删除该纸样")
         if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
-                delete_pattern(pattern_id)
-                st.success("已删除")
-                st.session_state.page = "pattern_list"
-                st.session_state.pop("pattern_id", None)
-                st.rerun()
+                deleted, message = delete_pattern(pattern_id)
+                if deleted:
+                    st.success(message)
+                    st.session_state.page = "pattern_list"
+                    st.session_state.pop("pattern_id", None)
+                    st.rerun()
+                else:
+                    st.warning(message)
             else:
                 st.error("请先勾选确认删除")
 
     with col2:
         st.subheader("📋 信息")
         st.write(f"录入时间: {format_date(p.get('created_at'))}")
+        st.write(f"被使用 {p.get('usage_count', 0)} 次")
 
         st.divider()
         st.subheader("✏️ 编辑")
