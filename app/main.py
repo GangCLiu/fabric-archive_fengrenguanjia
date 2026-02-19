@@ -1,6 +1,6 @@
 """
-布料档案管家 - 主程序
-Fabric Archive Manager
+小天裁 缝纫管家 - 主程序
+Xiaotiancai Sewing Manager
 要把工作目录 cd 在: \fabric-archive-main
 """
 import streamlit as st
@@ -29,7 +29,7 @@ from datetime import datetime
 
 # 页面配置
 st.set_page_config(
-    page_title="布料档案管家",
+    page_title="小天裁 缝纫管家",
     page_icon="🧵",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -71,7 +71,7 @@ st.markdown("""
 
 def show_home():
     """首页 - 布料列表"""
-    st.markdown('<div class="main-header">🧵 布料档案管家</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🧵 小天裁 缝纫管家</div>', unsafe_allow_html=True)
     
     # 统计卡片
     fabrics = get_all_fabrics()
@@ -873,7 +873,7 @@ def show_size_detail():
 # 侧边栏导航
 def sidebar():
     with st.sidebar:
-        st.title("🧵 布料档案管家")
+        st.title("🧵 小天裁 缝纫管家")
         st.divider()
         
         # 导航
