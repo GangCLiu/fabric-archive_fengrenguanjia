@@ -521,6 +521,7 @@ def show_pattern_list():
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
                 if p.get("notes"):
                     st.write(p["notes"][:60] + "..." if len(p["notes"]) > 60 else p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
 
                 if st.button("查看详情", key=f"pat_view_{p['id']}"):
@@ -540,6 +541,7 @@ def show_pattern_list():
                 st.write(f"**{p['name']}**")
                 if p.get("notes"):
                     st.write(p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
             with col3:
                 if st.button("详情", key=f"pat_list_view_{p['id']}"):
@@ -615,17 +617,21 @@ def show_pattern_detail():
         confirm_del = st.checkbox("确认删除该纸样")
         if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
-                delete_pattern(pattern_id)
-                st.success("已删除")
-                st.session_state.page = "pattern_list"
-                st.session_state.pop("pattern_id", None)
-                st.rerun()
+                deleted, message = delete_pattern(pattern_id)
+                if deleted:
+                    st.success(message)
+                    st.session_state.page = "pattern_list"
+                    st.session_state.pop("pattern_id", None)
+                    st.rerun()
+                else:
+                    st.warning(message)
             else:
                 st.error("请先勾选确认删除")
 
     with col2:
         st.subheader("📋 信息")
         st.write(f"录入时间: {format_date(p.get('created_at'))}")
+        st.write(f"被使用 {p.get('usage_count', 0)} 次")
 
         st.divider()
         st.subheader("✏️ 编辑")
