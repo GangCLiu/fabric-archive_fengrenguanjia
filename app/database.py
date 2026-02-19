@@ -67,6 +67,8 @@ def init_database():
     garment_columns = {row[1] for row in cursor.fetchall()}
     if "used_length" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    if "pattern_id" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_id INTEGER")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -235,7 +237,7 @@ def delete_fabric(fabric_id):
         conn.close()
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
+def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None, pattern_id=None):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -272,9 +274,9 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         )
 
         cursor.execute("""
-            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec)))
+            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length, pattern_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec), pattern_id))
 
         garment_id = cursor.lastrowid
         conn.commit()
@@ -317,6 +319,58 @@ def delete_garment(garment_id):
         raise
     finally:
         conn.close()
+
+
+def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
+    """获取成衣列表，含关联布料与纸样信息。"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    allowed_sort_fields = {
+        "created_at": "g.created_at",
+        "made_date": "g.made_date"
+    }
+    sort_column = allowed_sort_fields.get(sort_by, "g.created_at")
+    order = "ASC" if str(sort_order).upper() == "ASC" else "DESC"
+
+    query = """
+        SELECT
+            g.id,
+            g.fabric_id,
+            g.pattern_id,
+            g.name,
+            g.image_path,
+            g.made_date,
+            g.notes,
+            g.used_length,
+            g.created_at,
+            f.name AS fabric_name,
+            p.name AS pattern_name
+        FROM garments g
+        LEFT JOIN fabrics f ON g.fabric_id = f.id
+        LEFT JOIN patterns p ON g.pattern_id = p.id
+        WHERE 1=1
+    """
+    params = []
+
+    if search:
+        query += """
+            AND (
+                g.name LIKE ?
+                OR g.notes LIKE ?
+                OR f.name LIKE ?
+                OR p.name LIKE ?
+            )
+        """
+        params.extend([f"%{search}%"] * 4)
+
+    query += f" ORDER BY {sort_column} {order}, g.id DESC"
+
+    cursor.execute(query, params)
+    garments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return garments
 
 
 def get_all_shops():
