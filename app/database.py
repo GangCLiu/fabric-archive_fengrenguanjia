@@ -52,13 +52,15 @@ def init_database():
         CREATE TABLE IF NOT EXISTS garments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fabric_id INTEGER NOT NULL,
+            pattern_id INTEGER,
             name TEXT,
             image_path TEXT NOT NULL,
             made_date DATE,
             notes TEXT,
             used_length REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE
+            FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE,
+            FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
         )
     """)
 
@@ -67,6 +69,8 @@ def init_database():
     garment_columns = {row[1] for row in cursor.fetchall()}
     if "used_length" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    if "pattern_id" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_id INTEGER")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -161,7 +165,13 @@ def get_fabric_by_id(fabric_id):
     if fabric:
         fabric = dict(fabric)
         # 获取关联的成衣
-        cursor.execute("SELECT * FROM garments WHERE fabric_id = ? ORDER BY made_date DESC", (fabric_id,))
+        cursor.execute("""
+            SELECT g.*, p.name AS pattern_name
+            FROM garments g
+            LEFT JOIN patterns p ON g.pattern_id = p.id
+            WHERE g.fabric_id = ?
+            ORDER BY g.made_date DESC
+        """, (fabric_id,))
         fabric['garments'] = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
@@ -235,7 +245,7 @@ def delete_fabric(fabric_id):
         conn.close()
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
+def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None, pattern_id=None):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -272,9 +282,9 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         )
 
         cursor.execute("""
-            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec)))
+            INSERT INTO garments (fabric_id, pattern_id, name, image_path, made_date, notes, used_length)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (fabric_id, pattern_id, name, image_path, made_date, notes, float(used_length_dec)))
 
         garment_id = cursor.lastrowid
         conn.commit()
@@ -349,7 +359,19 @@ def get_all_patterns(search=None):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    query = "SELECT * FROM patterns WHERE 1=1"
+    query = """
+        SELECT
+            p.*,
+            COALESCE(gc.usage_count, 0) AS usage_count
+        FROM patterns p
+        LEFT JOIN (
+            SELECT pattern_id, COUNT(id) AS usage_count
+            FROM garments
+            WHERE pattern_id IS NOT NULL
+            GROUP BY pattern_id
+        ) gc ON p.id = gc.pattern_id
+        WHERE 1=1
+    """
     params = []
     if search:
         query += " AND name LIKE ?"
@@ -366,7 +388,17 @@ def get_pattern_by_id(pattern_id):
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM patterns WHERE id = ?", (pattern_id,))
+    cursor.execute("""
+        SELECT
+            p.*,
+            (
+                SELECT COUNT(g.id)
+                FROM garments g
+                WHERE g.pattern_id = p.id
+            ) AS usage_count
+        FROM patterns p
+        WHERE p.id = ?
+    """, (pattern_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -392,12 +424,24 @@ def update_pattern(pattern_id, **kwargs):
 
 
 def delete_pattern(pattern_id):
+    """删除纸样（若已被成衣引用则禁止删除）。"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
-    conn.commit()
-    conn.close()
-    return True
+    try:
+        cursor.execute("SELECT COUNT(id) FROM garments WHERE pattern_id = ?", (pattern_id,))
+        usage_count = cursor.fetchone()[0]
+        if usage_count > 0:
+            return False, f"该纸样已被 {usage_count} 条成衣记录引用，无法删除。请先修改或删除关联成衣。"
+
+        cursor.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+
+        if deleted:
+            return True, "已删除"
+        return False, "纸样不存在或已删除"
+    finally:
+        conn.close()
 
 
 # ==================== 尺码档案 Size Profiles ====================
@@ -538,11 +582,12 @@ def import_from_json(data):
         # 导入成衣
         for garment in data.get("garments", []):
             cursor.execute("""
-                INSERT INTO garments (id, fabric_id, name, image_path, made_date, notes, used_length, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO garments (id, fabric_id, pattern_id, name, image_path, made_date, notes, used_length, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
+                garment.get("pattern_id"),
                 garment.get("name"),
                 garment.get("image_path"),
                 garment.get("made_date"),
