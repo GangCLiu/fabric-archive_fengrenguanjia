@@ -1,6 +1,6 @@
 """
-布料档案管家 - 主程序
-Fabric Archive Manager
+小天裁 缝纫管家 - 主程序
+Xiaotiancai Sewing Manager
 要把工作目录 cd 在: \fabric-archive-main
 """
 import streamlit as st
@@ -14,7 +14,7 @@ from database import (
     init_database,
     add_fabric, get_all_fabrics, get_fabric_by_id,
     update_fabric, delete_fabric,
-    add_garment, delete_garment,
+    add_garment, delete_garment, get_all_garments, get_garment_by_id,
     get_all_shops,
 
     add_pattern, get_all_patterns, get_pattern_by_id, update_pattern, delete_pattern,
@@ -29,7 +29,7 @@ from datetime import datetime
 
 # 页面配置
 st.set_page_config(
-    page_title="布料档案管家",
+    page_title="小天裁 缝纫管家",
     page_icon="🧵",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -71,7 +71,7 @@ st.markdown("""
 
 def show_home():
     """首页 - 布料列表"""
-    st.markdown('<div class="main-header">🧵 布料档案管家</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🧵 小天裁 缝纫管家</div>', unsafe_allow_html=True)
     
     # 统计卡片
     fabrics = get_all_fabrics()
@@ -372,9 +372,14 @@ def show_fabric_detail():
         else:
             st.info("还没有成衣记录，点击下方按钮添加")
 
-        # 添加成衣按钮
-        if st.button("➕ 添加成衣作品"):
-            st.session_state.show_add_garment = True
+        action_col1, action_col2 = st.columns(2)
+        with action_col1:
+            if st.button("➕ 添加成衣作品"):
+                st.session_state.show_add_garment = True
+        with action_col2:
+            if st.button("👗 去成衣列表查看全部"):
+                st.session_state.page = "garment_list"
+                st.rerun()
 
         # 添加成衣表单
         if st.session_state.get('show_add_garment'):
@@ -391,6 +396,10 @@ def show_fabric_detail():
                 g_name = st.text_input("作品名称")
                 g_image = st.file_uploader("成衣照片", type=['png', 'jpg', 'jpeg'])
                 g_date = st.date_input("制作日期", datetime.now())
+                patterns = get_all_patterns()
+                pattern_options = {"不关联纸样": None}
+                pattern_options.update({p["name"]: p["id"] for p in patterns})
+                pattern_name = st.selectbox("关联纸样", list(pattern_options.keys()))
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
                 selected_fabric_name = st.selectbox("所用布料 *", options=fabric_name_options)
@@ -452,6 +461,98 @@ def show_fabric_detail():
                     if st.form_submit_button("取消"):
                         st.session_state.show_add_garment = False
                         st.rerun()
+
+
+def show_garment_list():
+    """成衣列表"""
+    st.header("👗 成衣列表")
+
+    col_search, col_sort, col_order = st.columns([3, 1.5, 1])
+    with col_search:
+        search = st.text_input("🔍 搜索成衣", placeholder="支持成衣名、布料名、纸样名、备注")
+    with col_sort:
+        sort_by = st.selectbox("排序字段", ["录入时间", "制作日期"], index=1)
+    with col_order:
+        sort_order = st.selectbox("顺序", ["倒序", "正序"], index=0)
+
+    sort_by_value = "made_date" if sort_by == "制作日期" else "created_at"
+    sort_order_value = "DESC" if sort_order == "倒序" else "ASC"
+    garments = get_all_garments(search=search or None, sort_by=sort_by_value, sort_order=sort_order_value)
+
+    st.write(f"找到 **{len(garments)}** 条成衣记录")
+    st.divider()
+
+    if not garments:
+        st.info("还没有成衣记录，可从布料详情页新增")
+        return
+
+    for garment in garments:
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            g_img = get_image_display_path(garment.get("image_path"))
+            if g_img:
+                st.image(g_img, width=120)
+            else:
+                st.caption("无图片")
+        with col2:
+            st.write(f"**{garment.get('name') or '未命名成衣'}**")
+            st.write(f"制作日期：{format_date(garment.get('made_date'))}")
+            st.write(f"所用布料：{garment.get('used_fabric_name') or garment.get('fabric_name') or '-'}")
+            st.write(f"所用纸样：{garment.get('pattern_name') or '-'}")
+            st.write(f"备注：{garment.get('notes') or '-'}")
+            if st.button("查看详情", key=f"garment_detail_{garment['id']}"):
+                st.session_state.page = "garment_detail"
+                st.session_state.garment_id = garment['id']
+                st.rerun()
+        st.divider()
+
+
+def show_garment_detail():
+    """成衣详情页"""
+    garment_id = st.session_state.get("garment_id")
+    if not garment_id:
+        st.error("未指定成衣ID")
+        return
+
+    garment = get_garment_by_id(garment_id)
+    if not garment:
+        st.error("成衣不存在")
+        return
+
+    if st.button("← 返回成衣列表"):
+        st.session_state.page = "garment_list"
+        st.rerun()
+
+    st.header(f"👗 {garment.get('name') or '未命名成衣'}")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        g_img = get_image_display_path(garment.get("image_path"))
+        if g_img:
+            st.image(g_img, width='stretch')
+        else:
+            st.caption("无图片")
+
+        st.divider()
+        confirm_delete = st.checkbox("确认删除该成衣", key=f"confirm_delete_garment_{garment_id}")
+        if st.button("🗑️ 删除该成衣", type="secondary", width='stretch'):
+            if confirm_delete:
+                delete_garment(garment_id)
+                st.success("已删除")
+                st.session_state.page = "garment_list"
+                st.session_state.pop("garment_id", None)
+                st.rerun()
+            else:
+                st.error("请先勾选确认删除")
+
+    with col2:
+        st.subheader("📋 成衣信息")
+        st.write(f"**制作日期：** {format_date(garment.get('made_date'))}")
+        st.write(f"**使用布长：** {format_length(garment.get('used_length'))}")
+        st.write(f"**所用布料：** {garment.get('used_fabric_name') or garment.get('fabric_name') or '-'}")
+        st.write(f"**所用纸样：** {garment.get('pattern_name') or '-'}")
+        st.write(f"**备注：** {garment.get('notes') or '-'}")
+        st.write(f"**录入时间：** {format_date(garment.get('created_at'))}")
 
 def show_backup():
     """数据备份页面"""
@@ -521,6 +622,7 @@ def show_pattern_list():
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
                 if p.get("notes"):
                     st.write(p["notes"][:60] + "..." if len(p["notes"]) > 60 else p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
 
                 if st.button("查看详情", key=f"pat_view_{p['id']}"):
@@ -540,6 +642,7 @@ def show_pattern_list():
                 st.write(f"**{p['name']}**")
                 if p.get("notes"):
                     st.write(p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
             with col3:
                 if st.button("详情", key=f"pat_list_view_{p['id']}"):
@@ -615,17 +718,21 @@ def show_pattern_detail():
         confirm_del = st.checkbox("确认删除该纸样")
         if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
-                delete_pattern(pattern_id)
-                st.success("已删除")
-                st.session_state.page = "pattern_list"
-                st.session_state.pop("pattern_id", None)
-                st.rerun()
+                deleted, message = delete_pattern(pattern_id)
+                if deleted:
+                    st.success(message)
+                    st.session_state.page = "pattern_list"
+                    st.session_state.pop("pattern_id", None)
+                    st.rerun()
+                else:
+                    st.warning(message)
             else:
                 st.error("请先勾选确认删除")
 
     with col2:
         st.subheader("📋 信息")
         st.write(f"录入时间: {format_date(p.get('created_at'))}")
+        st.write(f"被使用 {p.get('usage_count', 0)} 次")
 
         st.divider()
         st.subheader("✏️ 编辑")
@@ -842,12 +949,13 @@ def show_size_detail():
 # 侧边栏导航
 def sidebar():
     with st.sidebar:
-        st.title("🧵 布料档案管家")
+        st.title("🧵 小天裁 缝纫管家")
         st.divider()
         
         # 导航
         pages = {
             "home": "📦 布料列表",
+            "garment_list": "👗 成衣列表",
             "pattern_list": "📄 纸样列表",
             "size_list": "📐 尺码档案",
 
@@ -864,6 +972,8 @@ def sidebar():
                     st.session_state.pop("pattern_id", None)
                 if page_id != "size_detail":
                     st.session_state.pop("size_profile_id", None)
+                if page_id != "garment_detail":
+                    st.session_state.pop("garment_id", None)
 
                 st.session_state.pop("show_add_garment", None)
 
@@ -892,6 +1002,10 @@ def main():
         show_add_fabric()
     elif page == 'detail':
         show_fabric_detail()
+    elif page == "garment_list":
+        show_garment_list()
+    elif page == "garment_detail":
+        show_garment_detail()
 
     elif page == "pattern_list":
         show_pattern_list()

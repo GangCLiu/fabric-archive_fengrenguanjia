@@ -52,6 +52,7 @@ def init_database():
         CREATE TABLE IF NOT EXISTS garments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fabric_id INTEGER NOT NULL,
+            pattern_id INTEGER,
             name TEXT,
             image_path TEXT NOT NULL,
             made_date DATE,
@@ -379,6 +380,91 @@ def delete_garment(garment_id):
         conn.close()
 
 
+def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
+    """获取成衣列表，含关联布料与纸样信息。"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    allowed_sort_fields = {
+        "created_at": "g.created_at",
+        "made_date": "g.made_date"
+    }
+    sort_column = allowed_sort_fields.get(sort_by, "g.created_at")
+    order = "ASC" if str(sort_order).upper() == "ASC" else "DESC"
+
+    query = """
+        SELECT
+            g.id,
+            g.fabric_id,
+            g.pattern_id,
+            g.name,
+            g.image_path,
+            g.made_date,
+            g.notes,
+            g.used_length,
+            g.used_fabric_name,
+            g.created_at,
+            f.name AS fabric_name,
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
+        FROM garments g
+        LEFT JOIN fabrics f ON g.fabric_id = f.id
+        LEFT JOIN patterns p ON g.pattern_id = p.id
+        WHERE 1=1
+    """
+    params = []
+
+    if search:
+        query += """
+            AND (
+                g.name LIKE ?
+                OR g.notes LIKE ?
+                OR f.name LIKE ?
+                OR p.name LIKE ?
+            )
+        """
+        params.extend([f"%{search}%"] * 4)
+
+    query += f" ORDER BY {sort_column} {order}, g.id DESC"
+
+    cursor.execute(query, params)
+    garments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return garments
+
+
+def get_garment_by_id(garment_id):
+    """获取单条成衣详情，含关联布料与纸样显示名。"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            g.id,
+            g.fabric_id,
+            g.pattern_id,
+            g.name,
+            g.image_path,
+            g.made_date,
+            g.notes,
+            g.used_length,
+            g.used_fabric_name,
+            g.pattern_name_snapshot,
+            g.created_at,
+            f.name AS fabric_name,
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
+        FROM garments g
+        LEFT JOIN fabrics f ON g.fabric_id = f.id
+        LEFT JOIN patterns p ON g.pattern_id = p.id
+        WHERE g.id = ?
+    """, (garment_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def get_all_shops():
     """获取所有店铺列表（用于筛选）"""
     conn = sqlite3.connect(DATABASE_PATH)
@@ -409,7 +495,19 @@ def get_all_patterns(search=None):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    query = "SELECT * FROM patterns WHERE 1=1"
+    query = """
+        SELECT
+            p.*,
+            COALESCE(gc.usage_count, 0) AS usage_count
+        FROM patterns p
+        LEFT JOIN (
+            SELECT pattern_id, COUNT(id) AS usage_count
+            FROM garments
+            WHERE pattern_id IS NOT NULL
+            GROUP BY pattern_id
+        ) gc ON p.id = gc.pattern_id
+        WHERE 1=1
+    """
     params = []
     if search:
         query += " AND name LIKE ?"
@@ -426,7 +524,17 @@ def get_pattern_by_id(pattern_id):
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM patterns WHERE id = ?", (pattern_id,))
+    cursor.execute("""
+        SELECT
+            p.*,
+            (
+                SELECT COUNT(g.id)
+                FROM garments g
+                WHERE g.pattern_id = p.id
+            ) AS usage_count
+        FROM patterns p
+        WHERE p.id = ?
+    """, (pattern_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -452,12 +560,24 @@ def update_pattern(pattern_id, **kwargs):
 
 
 def delete_pattern(pattern_id):
+    """删除纸样（若已被成衣引用则禁止删除）。"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
-    conn.commit()
-    conn.close()
-    return True
+    try:
+        cursor.execute("SELECT COUNT(id) FROM garments WHERE pattern_id = ?", (pattern_id,))
+        usage_count = cursor.fetchone()[0]
+        if usage_count > 0:
+            return False, f"该纸样已被 {usage_count} 条成衣记录引用，无法删除。请先修改或删除关联成衣。"
+
+        cursor.execute("DELETE FROM patterns WHERE id = ?", (pattern_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+
+        if deleted:
+            return True, "已删除"
+        return False, "纸样不存在或已删除"
+    finally:
+        conn.close()
 
 
 # ==================== 尺码档案 Size Profiles ====================
@@ -627,6 +747,7 @@ def import_from_json(data):
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
+                garment.get("pattern_id"),
                 garment.get("name"),
                 garment.get("image_path"),
                 garment.get("made_date"),
