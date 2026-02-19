@@ -14,7 +14,7 @@ from database import (
     init_database,
     add_fabric, get_all_fabrics, get_fabric_by_id,
     update_fabric, delete_fabric,
-    add_garment, delete_garment, get_all_garments,
+    add_garment, delete_garment, get_all_garments, get_garment_by_id,
     get_all_shops,
 
     add_pattern, get_all_patterns, get_pattern_by_id, update_pattern, delete_pattern,
@@ -383,14 +383,6 @@ def show_fabric_detail():
 
         # 添加成衣表单
         if st.session_state.get('show_add_garment'):
-            all_fabrics = get_all_fabrics()
-            all_patterns = get_all_patterns()
-            fabric_name_options = [f.get('name') for f in all_fabrics if f.get('name')]
-            if "其他" not in fabric_name_options:
-                fabric_name_options.append("其他")
-            pattern_options = [(None, "其他")] + [(p.get('id'), p.get('name')) for p in all_patterns if p.get('name')]
-            pattern_labels = [label for _, label in pattern_options]
-
             with st.form("add_garment_form"):
                 st.write("**新增成衣**")
                 g_name = st.text_input("作品名称")
@@ -402,13 +394,6 @@ def show_fabric_detail():
                 pattern_name = st.selectbox("关联纸样", list(pattern_options.keys()))
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
-                selected_fabric_name = st.selectbox("所用布料 *", options=fabric_name_options)
-                custom_fabric_name = None
-                if selected_fabric_name == "其他":
-                    custom_fabric_name = st.text_input("请填写所用布料名称 *")
-
-                selected_pattern_label = st.selectbox("所用纸样", options=pattern_labels, index=0)
-                selected_pattern_id = next((pid for pid, label in pattern_options if label == selected_pattern_label), None)
 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
@@ -450,46 +435,6 @@ def show_fabric_detail():
                             st.error("请上传成衣照片")
                             return
 
-                        if selected_fabric_name == "其他" and not (custom_fabric_name or "").strip():
-                            st.error("请选择所用布料或填写“其他”布料名称")
-                            return
-
-                        used_fabric_name = (custom_fabric_name or "").strip() if selected_fabric_name == "其他" else selected_fabric_name
-                        remaining_length = fabric.get('length')
-                        if g_used_length <= 0:
-                            st.error("请输入有效的使用布长（需大于 0）")
-                            return
-                        if remaining_length is None:
-                            st.error("该布料没有可用的剩余长度，无法扣减")
-                            return
-                        if g_used_length > remaining_length:
-                            st.error("使用布长不能超过当前剩余长度")
-                            return
-
-                        # 保存图片
-                        img_path = save_uploaded_file(g_image, "garment_images")
-                        compressed = compress_image(img_path)
-
-                        try:
-                            add_garment(
-                                fabric_id=fabric_id,
-                                name=g_name or None,
-                                image_path=compressed,
-                                made_date=g_date.isoformat(),
-                                notes=g_notes or None,
-                                used_length=g_used_length,
-                                used_fabric_name=used_fabric_name,
-                                pattern_id=selected_pattern_id,
-                                pattern_name_snapshot=selected_pattern_label if selected_pattern_id else None,
-                            )
-                        except ValueError as e:
-                            st.error(str(e))
-                            return
-
-                        st.success("✅ 成衣记录已添加")
-                        st.session_state.show_add_garment = False
-                        st.rerun()
-
                 with col_cancel:
                     if st.form_submit_button("取消"):
                         st.session_state.show_add_garment = False
@@ -530,10 +475,62 @@ def show_garment_list():
         with col2:
             st.write(f"**{garment.get('name') or '未命名成衣'}**")
             st.write(f"制作日期：{format_date(garment.get('made_date'))}")
-            st.write(f"所用布料：{garment.get('fabric_name') or '-'}")
+            st.write(f"所用布料：{garment.get('used_fabric_name') or garment.get('fabric_name') or '-'}")
             st.write(f"所用纸样：{garment.get('pattern_name') or '-'}")
             st.write(f"备注：{garment.get('notes') or '-'}")
+            if st.button("查看详情", key=f"garment_detail_{garment['id']}"):
+                st.session_state.page = "garment_detail"
+                st.session_state.garment_id = garment['id']
+                st.rerun()
         st.divider()
+
+
+def show_garment_detail():
+    """成衣详情页"""
+    garment_id = st.session_state.get("garment_id")
+    if not garment_id:
+        st.error("未指定成衣ID")
+        return
+
+    garment = get_garment_by_id(garment_id)
+    if not garment:
+        st.error("成衣不存在")
+        return
+
+    if st.button("← 返回成衣列表"):
+        st.session_state.page = "garment_list"
+        st.rerun()
+
+    st.header(f"👗 {garment.get('name') or '未命名成衣'}")
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        g_img = get_image_display_path(garment.get("image_path"))
+        if g_img:
+            st.image(g_img, width='stretch')
+        else:
+            st.caption("无图片")
+
+        st.divider()
+        confirm_delete = st.checkbox("确认删除该成衣", key=f"confirm_delete_garment_{garment_id}")
+        if st.button("🗑️ 删除该成衣", type="secondary", width='stretch'):
+            if confirm_delete:
+                delete_garment(garment_id)
+                st.success("已删除")
+                st.session_state.page = "garment_list"
+                st.session_state.pop("garment_id", None)
+                st.rerun()
+            else:
+                st.error("请先勾选确认删除")
+
+    with col2:
+        st.subheader("📋 成衣信息")
+        st.write(f"**制作日期：** {format_date(garment.get('made_date'))}")
+        st.write(f"**使用布长：** {format_length(garment.get('used_length'))}")
+        st.write(f"**所用布料：** {garment.get('used_fabric_name') or garment.get('fabric_name') or '-'}")
+        st.write(f"**所用纸样：** {garment.get('pattern_name') or '-'}")
+        st.write(f"**备注：** {garment.get('notes') or '-'}")
+        st.write(f"**录入时间：** {format_date(garment.get('created_at'))}")
 
 def show_backup():
     """数据备份页面"""
@@ -896,6 +893,8 @@ def sidebar():
                     st.session_state.pop("pattern_id", None)
                 if page_id != "size_detail":
                     st.session_state.pop("size_profile_id", None)
+                if page_id != "garment_detail":
+                    st.session_state.pop("garment_id", None)
 
                 st.session_state.pop("show_add_garment", None)
 
@@ -926,6 +925,8 @@ def main():
         show_fabric_detail()
     elif page == "garment_list":
         show_garment_list()
+    elif page == "garment_detail":
+        show_garment_detail()
 
     elif page == "pattern_list":
         show_pattern_list()

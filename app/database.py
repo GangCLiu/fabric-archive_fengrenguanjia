@@ -59,7 +59,6 @@ def init_database():
             notes TEXT,
             used_length REAL,
             used_fabric_name TEXT,
-            pattern_id INTEGER,
             pattern_name_snapshot TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE,
@@ -72,8 +71,12 @@ def init_database():
     garment_columns = {row[1] for row in cursor.fetchall()}
     if "used_length" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    if "used_fabric_name" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN used_fabric_name TEXT")
     if "pattern_id" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN pattern_id INTEGER")
+    if "pattern_name_snapshot" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_name_snapshot TEXT")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -376,9 +379,10 @@ def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
             g.made_date,
             g.notes,
             g.used_length,
+            g.used_fabric_name,
             g.created_at,
             f.name AS fabric_name,
-            p.name AS pattern_name
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
         FROM garments g
         LEFT JOIN fabrics f ON g.fabric_id = f.id
         LEFT JOIN patterns p ON g.pattern_id = p.id
@@ -403,6 +407,38 @@ def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
     garments = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return garments
+
+
+def get_garment_by_id(garment_id):
+    """获取单条成衣详情，含关联布料与纸样显示名。"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            g.id,
+            g.fabric_id,
+            g.pattern_id,
+            g.name,
+            g.image_path,
+            g.made_date,
+            g.notes,
+            g.used_length,
+            g.used_fabric_name,
+            g.pattern_name_snapshot,
+            g.created_at,
+            f.name AS fabric_name,
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
+        FROM garments g
+        LEFT JOIN fabrics f ON g.fabric_id = f.id
+        LEFT JOIN patterns p ON g.pattern_id = p.id
+        WHERE g.id = ?
+    """, (garment_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_all_shops():
