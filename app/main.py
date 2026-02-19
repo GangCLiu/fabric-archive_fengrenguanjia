@@ -108,6 +108,7 @@ def show_home():
     with col_add:
         st.write("")
         if st.button("➕ 去添加布料", width='stretch'):
+        if st.button("➕ 去添加布料", width='stretch'):
             st.session_state.page = "add"
             st.rerun()
     
@@ -271,6 +272,7 @@ def show_fabric_detail():
         st.divider()
         confirm_delete = st.checkbox("确认删除这块布料", key=f"confirm_delete_fabric_{fabric_id}")
         if st.button("🗑️ 删除这块布料", type="secondary", width='stretch'):
+        if st.button("🗑️ 删除这块布料", type="secondary", width='stretch'):
             if confirm_delete:
                 deleted = delete_fabric(fabric_id)
                 if deleted:
@@ -316,6 +318,7 @@ def show_fabric_detail():
 
             new_fabric_image = st.file_uploader("替换布料图片（可选）", type=['png', 'jpg', 'jpeg'])
 
+            if st.form_submit_button("💾 保存修改", width='stretch'):
             if st.form_submit_button("💾 保存修改", width='stretch'):
                 if not new_name:
                     st.error("布料名称不能为空")
@@ -476,6 +479,7 @@ def show_pattern_list():
         view_mode = st.selectbox("📊 视图", ["网格", "列表"])
     with col_c:
         if st.button("➕ 去添加纸样", width='stretch'):
+        if st.button("➕ 去添加纸样", width='stretch'):
             st.session_state.page = "pattern_add"
             st.rerun()
 
@@ -597,6 +601,7 @@ def show_pattern_detail():
         st.divider()
         confirm_del = st.checkbox("确认删除该纸样")
         if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
+        if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
                 delete_pattern(pattern_id)
                 st.success("已删除")
@@ -617,6 +622,7 @@ def show_pattern_detail():
             new_img = st.file_uploader("替换图片（可选）", type=["png", "jpg", "jpeg"])
             new_notes = st.text_area("备注", value=p.get("notes") or "")
 
+            if st.form_submit_button("保存修改", width='stretch'):
             if st.form_submit_button("保存修改", width='stretch'):
                 if not new_name:
                     st.error("纸样名称不能为空")
@@ -640,6 +646,7 @@ def show_size_list():
     with col_a:
         search = st.text_input("🔍 搜索档案", placeholder="输入档案名称...")
     with col_b:
+        if st.button("➕ 新增尺码档案", width='stretch'):
         if st.button("➕ 新增尺码档案", width='stretch'):
             st.session_state.page = "size_add"
             st.rerun()
@@ -744,6 +751,7 @@ def show_size_detail():
         new_desc = st.text_area("描述", value=sp.get("description") or "")
 
         if st.form_submit_button("保存修改", width='stretch'):
+        if st.form_submit_button("保存修改", width='stretch'):
             if not new_name:
                 st.error("档案名称不能为空")
                 return
@@ -784,6 +792,7 @@ def sidebar():
 
         
         for page_id, page_name in pages.items():
+            if st.button(page_name, width='stretch'):
             if st.button(page_name, width='stretch'):
                 st.session_state.page = page_id
                 if page_id != "detail":
