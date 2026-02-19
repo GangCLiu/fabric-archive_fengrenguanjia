@@ -245,6 +245,13 @@ def update_fabric(fabric_id, **kwargs):
         values = list(updates.values()) + [fabric_id]
 
         cursor.execute(f"UPDATE fabrics SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
+
+        if "name" in updates:
+            cursor.execute(
+                "UPDATE garments SET used_fabric_name = ? WHERE fabric_id = ?",
+                (updates["name"], fabric_id)
+            )
+
         conn.commit()
         return cursor.rowcount > 0
     except Exception:
@@ -278,12 +285,12 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT length FROM fabrics WHERE id = ?", (fabric_id,))
+        cursor.execute("SELECT name, length FROM fabrics WHERE id = ?", (fabric_id,))
         row = cursor.fetchone()
         if not row:
             raise ValueError("布料不存在")
 
-        current_length = row[0]
+        fabric_name, current_length = row
 
         if used_length is None:
             used_length = 0
@@ -302,6 +309,16 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
             raise ValueError("使用布长不能超过当前剩余长度")
 
         new_length_dec = _normalize_length(current_length_dec - used_length_dec)
+
+        if used_fabric_name is None:
+            used_fabric_name = fabric_name
+
+        if pattern_id is not None and pattern_name_snapshot is None:
+            cursor.execute("SELECT name FROM patterns WHERE id = ?", (pattern_id,))
+            pattern_row = cursor.fetchone()
+            if not pattern_row:
+                raise ValueError("纸样不存在")
+            pattern_name_snapshot = pattern_row[0]
 
         cursor.execute(
             "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -449,6 +466,23 @@ def update_garment(garment_id, **kwargs):
 
         if "used_length" in updates and updates["used_length"] is not None:
             updates["used_length"] = float(_normalize_length(updates["used_length"]))
+
+        if "fabric_id" in updates and "used_fabric_name" not in updates:
+            cursor.execute("SELECT name FROM fabrics WHERE id = ?", (new_fabric_id,))
+            fabric_row = cursor.fetchone()
+            if not fabric_row:
+                raise ValueError("目标布料不存在")
+            updates["used_fabric_name"] = fabric_row[0]
+
+        if "pattern_id" in updates and "pattern_name_snapshot" not in updates:
+            if updates["pattern_id"] is None:
+                updates["pattern_name_snapshot"] = None
+            else:
+                cursor.execute("SELECT name FROM patterns WHERE id = ?", (updates["pattern_id"],))
+                pattern_row = cursor.fetchone()
+                if not pattern_row:
+                    raise ValueError("纸样不存在")
+                updates["pattern_name_snapshot"] = pattern_row[0]
 
         set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
         values = list(updates.values()) + [garment_id]
@@ -653,6 +687,12 @@ def update_pattern(pattern_id, **kwargs):
         f"UPDATE patterns SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         values
     )
+
+    if "name" in updates:
+        cursor.execute(
+            "UPDATE garments SET pattern_name_snapshot = ? WHERE pattern_id = ?",
+            (updates["name"], pattern_id)
+        )
     conn.commit()
     conn.close()
     return True
@@ -846,7 +886,6 @@ def import_from_json(data):
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
-                garment.get("pattern_id"),
                 garment.get("name"),
                 garment.get("image_path"),
                 garment.get("made_date"),
