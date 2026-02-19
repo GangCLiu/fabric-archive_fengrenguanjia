@@ -383,6 +383,14 @@ def show_fabric_detail():
 
         # 添加成衣表单
         if st.session_state.get('show_add_garment'):
+            all_fabrics = get_all_fabrics()
+            all_patterns = get_all_patterns()
+            fabric_name_options = [f.get('name') for f in all_fabrics if f.get('name')]
+            if "其他" not in fabric_name_options:
+                fabric_name_options.append("其他")
+            pattern_options = [(None, "其他")] + [(p.get('id'), p.get('name')) for p in all_patterns if p.get('name')]
+            pattern_labels = [label for _, label in pattern_options]
+
             with st.form("add_garment_form"):
                 st.write("**新增成衣**")
                 g_name = st.text_input("作品名称")
@@ -394,46 +402,60 @@ def show_fabric_detail():
                 pattern_name = st.selectbox("关联纸样", list(pattern_options.keys()))
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
+                selected_fabric_name = st.selectbox("所用布料 *", options=fabric_name_options)
+                custom_fabric_name = None
+                if selected_fabric_name == "其他":
+                    custom_fabric_name = st.text_input("请填写所用布料名称 *")
+
+                selected_pattern_label = st.selectbox("所用纸样", options=pattern_labels, index=0)
+                selected_pattern_id = next((pid for pid, label in pattern_options if label == selected_pattern_label), None)
 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
                     if st.form_submit_button("💾 保存"):
-                        if g_image:
-                            remaining_length = fabric.get('length')
-                            if g_used_length <= 0:
-                                st.error("请输入有效的使用布长（需大于 0）")
-                                return
-                            if remaining_length is None:
-                                st.error("该布料没有可用的剩余长度，无法扣减")
-                                return
-                            if g_used_length > remaining_length:
-                                st.error("使用布长不能超过当前剩余长度")
-                                return
-
-                            # 保存图片
-                            img_path = save_uploaded_file(g_image, "garment_images")
-                            compressed = compress_image(img_path)
-
-                            try:
-                                add_garment(
-                                    fabric_id=fabric_id,
-                                    name=g_name or None,
-                                    image_path=compressed,
-                                    made_date=g_date.isoformat(),
-                                    notes=g_notes or None,
-                                    used_length=g_used_length,
-                                    pattern_id=pattern_options[pattern_name]
-                                )
-                            except ValueError as e:
-                                st.error(str(e))
-                                return
-
-                            st.success("✅ 成衣记录已添加")
-                            st.session_state.show_add_garment = False
-                            st.rerun()
-                        else:
+                        if not g_image:
                             st.error("请上传成衣照片")
                             return
+
+                        if selected_fabric_name == "其他" and not (custom_fabric_name or "").strip():
+                            st.error("请选择所用布料或填写“其他”布料名称")
+                            return
+
+                        used_fabric_name = (custom_fabric_name or "").strip() if selected_fabric_name == "其他" else selected_fabric_name
+                        remaining_length = fabric.get('length')
+                        if g_used_length <= 0:
+                            st.error("请输入有效的使用布长（需大于 0）")
+                            return
+                        if remaining_length is None:
+                            st.error("该布料没有可用的剩余长度，无法扣减")
+                            return
+                        if g_used_length > remaining_length:
+                            st.error("使用布长不能超过当前剩余长度")
+                            return
+
+                        # 保存图片
+                        img_path = save_uploaded_file(g_image, "garment_images")
+                        compressed = compress_image(img_path)
+
+                        try:
+                            add_garment(
+                                fabric_id=fabric_id,
+                                name=g_name or None,
+                                image_path=compressed,
+                                made_date=g_date.isoformat(),
+                                notes=g_notes or None,
+                                used_length=g_used_length,
+                                used_fabric_name=used_fabric_name,
+                                pattern_id=selected_pattern_id,
+                                pattern_name_snapshot=selected_pattern_label if selected_pattern_id else None,
+                            )
+                        except ValueError as e:
+                            st.error(str(e))
+                            return
+
+                        st.success("✅ 成衣记录已添加")
+                        st.session_state.show_add_garment = False
+                        st.rerun()
 
                 with col_cancel:
                     if st.form_submit_button("取消"):
@@ -761,6 +783,16 @@ def show_size_list():
             h = sp.get("height_cm")
             w = sp.get("weight_kg")
             st.write(f"身高: {h if h is not None else '-'} cm，体重: {w if w is not None else '-'} kg")
+            st.write(
+                f"胸围: {sp.get('bust_cm') if sp.get('bust_cm') is not None else '-'} cm，"
+                f"腰围: {sp.get('waist_cm') if sp.get('waist_cm') is not None else '-'} cm，"
+                f"臀围: {sp.get('hip_cm') if sp.get('hip_cm') is not None else '-'} cm"
+            )
+            st.write(
+                f"臂长: {sp.get('arm_length_cm') if sp.get('arm_length_cm') is not None else '-'} cm，"
+                f"衣长: {sp.get('garment_length_cm') if sp.get('garment_length_cm') is not None else '-'} cm，"
+                f"腿长: {sp.get('leg_length_cm') if sp.get('leg_length_cm') is not None else '-'} cm"
+            )
             if sp.get("description"):
                 st.write(sp["description"])
         with col2:
@@ -784,8 +816,14 @@ def show_size_add():
         col1, col2 = st.columns(2)
         with col1:
             height_cm = st.number_input("身高 cm", min_value=0, step=1)
+            bust_cm = st.number_input("胸围 cm", min_value=0.0, step=0.1)
+            hip_cm = st.number_input("臀围 cm", min_value=0.0, step=0.1)
+            garment_length_cm = st.number_input("衣长 cm", min_value=0.0, step=0.1)
         with col2:
             weight_kg = st.number_input("体重 kg", min_value=0.0, step=0.1)
+            waist_cm = st.number_input("腰围 cm", min_value=0.0, step=0.1)
+            arm_length_cm = st.number_input("臂长 cm", min_value=0.0, step=0.1)
+            leg_length_cm = st.number_input("腿长 cm", min_value=0.0, step=0.1)
 
         description = st.text_area("描述", placeholder="例如：偏瘦，肩略宽，喜欢宽松版型")
 
@@ -806,8 +844,25 @@ def show_size_add():
 
             h_val = int(height_cm) if height_cm and height_cm > 0 else None
             w_val = float(weight_kg) if weight_kg and weight_kg > 0 else None
+            bust_val = float(bust_cm) if bust_cm and bust_cm > 0 else None
+            waist_val = float(waist_cm) if waist_cm and waist_cm > 0 else None
+            hip_val = float(hip_cm) if hip_cm and hip_cm > 0 else None
+            arm_len_val = float(arm_length_cm) if arm_length_cm and arm_length_cm > 0 else None
+            garment_len_val = float(garment_length_cm) if garment_length_cm and garment_length_cm > 0 else None
+            leg_len_val = float(leg_length_cm) if leg_length_cm and leg_length_cm > 0 else None
 
-            sid = add_size_profile(name=name, height_cm=h_val, weight_kg=w_val, description=description or None)
+            sid = add_size_profile(
+                name=name,
+                height_cm=h_val,
+                weight_kg=w_val,
+                bust_cm=bust_val,
+                waist_cm=waist_val,
+                hip_cm=hip_val,
+                arm_length_cm=arm_len_val,
+                garment_length_cm=garment_len_val,
+                leg_length_cm=leg_len_val,
+                description=description or None,
+            )
             st.success(f"✅ 尺码档案已保存，ID: {sid}")
             st.session_state.page = "size_list"
             st.rerun()
@@ -838,8 +893,14 @@ def show_size_detail():
         col1, col2 = st.columns(2)
         with col1:
             new_height = st.number_input("身高 cm", min_value=0, step=1, value=int(sp.get("height_cm") or 0))
+            new_bust = st.number_input("胸围 cm", min_value=0.0, step=0.1, value=float(sp.get("bust_cm") or 0.0))
+            new_hip = st.number_input("臀围 cm", min_value=0.0, step=0.1, value=float(sp.get("hip_cm") or 0.0))
+            new_garment_length = st.number_input("衣长 cm", min_value=0.0, step=0.1, value=float(sp.get("garment_length_cm") or 0.0))
         with col2:
             new_weight = st.number_input("体重 kg", min_value=0.0, step=0.1, value=float(sp.get("weight_kg") or 0.0))
+            new_waist = st.number_input("腰围 cm", min_value=0.0, step=0.1, value=float(sp.get("waist_cm") or 0.0))
+            new_arm_length = st.number_input("臂长 cm", min_value=0.0, step=0.1, value=float(sp.get("arm_length_cm") or 0.0))
+            new_leg_length = st.number_input("腿长 cm", min_value=0.0, step=0.1, value=float(sp.get("leg_length_cm") or 0.0))
 
         new_desc = st.text_area("描述", value=sp.get("description") or "")
 
@@ -850,8 +911,26 @@ def show_size_detail():
 
             h_val = int(new_height) if new_height and new_height > 0 else None
             w_val = float(new_weight) if new_weight and new_weight > 0 else None
+            bust_val = float(new_bust) if new_bust and new_bust > 0 else None
+            waist_val = float(new_waist) if new_waist and new_waist > 0 else None
+            hip_val = float(new_hip) if new_hip and new_hip > 0 else None
+            arm_len_val = float(new_arm_length) if new_arm_length and new_arm_length > 0 else None
+            garment_len_val = float(new_garment_length) if new_garment_length and new_garment_length > 0 else None
+            leg_len_val = float(new_leg_length) if new_leg_length and new_leg_length > 0 else None
 
-            update_size_profile(sid, name=new_name, height_cm=h_val, weight_kg=w_val, description=new_desc or None)
+            update_size_profile(
+                sid,
+                name=new_name,
+                height_cm=h_val,
+                weight_kg=w_val,
+                bust_cm=bust_val,
+                waist_cm=waist_val,
+                hip_cm=hip_val,
+                arm_length_cm=arm_len_val,
+                garment_length_cm=garment_len_val,
+                leg_length_cm=leg_len_val,
+                description=new_desc or None,
+            )
             st.success("✅ 已保存修改")
             st.rerun()
 

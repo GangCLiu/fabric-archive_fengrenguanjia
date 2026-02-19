@@ -59,6 +59,7 @@ def init_database():
             notes TEXT,
             used_length REAL,
             used_fabric_name TEXT,
+            pattern_id INTEGER,
             pattern_name_snapshot TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE,
@@ -272,7 +273,17 @@ def delete_fabric(fabric_id):
         conn.close()
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None, pattern_id=None):
+def add_garment(
+    fabric_id,
+    name=None,
+    image_path=None,
+    made_date=None,
+    notes=None,
+    used_length=None,
+    used_fabric_name=None,
+    pattern_id=None,
+    pattern_name_snapshot=None,
+):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -309,9 +320,22 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         )
 
         cursor.execute("""
-            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length, pattern_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec), pattern_id))
+            INSERT INTO garments (
+                fabric_id, name, image_path, made_date, notes, used_length,
+                used_fabric_name, pattern_id, pattern_name_snapshot
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            fabric_id,
+            name,
+            image_path,
+            made_date,
+            notes,
+            float(used_length_dec),
+            used_fabric_name,
+            pattern_id,
+            pattern_name_snapshot,
+        ))
 
         garment_id = cursor.lastrowid
         conn.commit()
