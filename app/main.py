@@ -129,7 +129,9 @@ def show_home():
                     img_path = get_image_display_path(fabric.get('fabric_image_path') or fabric.get('order_image_path'))
                     if img_path:
                         st.image(img_path, width='stretch')
+                        st.image(img_path, width='stretch')
                     else:
+                        st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
                         st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
                     
                     # 信息
@@ -262,6 +264,7 @@ def show_fabric_detail():
         # 大图
         img_path = get_image_display_path(fabric.get('fabric_image_path') or fabric.get('order_image_path'))
         if img_path:
+            st.image(img_path, width='stretch')
             st.image(img_path, width='stretch')
 
         # 操作按钮
@@ -489,7 +492,9 @@ def show_pattern_list():
                 img_path = get_image_display_path(p.get("image_path"))
                 if img_path:
                     st.image(img_path, width='stretch')
+                    st.image(img_path, width='stretch')
                 else:
+                    st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
                     st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
 
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
@@ -536,7 +541,9 @@ def show_pattern_add():
         col_s, col_b = st.columns(2)
         with col_s:
             submitted = st.form_submit_button("💾 保存纸样", width='stretch')
+            submitted = st.form_submit_button("💾 保存纸样", width='stretch')
         with col_b:
+            back = st.form_submit_button("取消并返回", width='stretch')
             back = st.form_submit_button("取消并返回", width='stretch')
 
         if back:
@@ -582,7 +589,9 @@ def show_pattern_detail():
         img_path = get_image_display_path(p.get("image_path"))
         if img_path:
             st.image(img_path, width='stretch')
+            st.image(img_path, width='stretch')
         else:
+            st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
             st.image("https://via.placeholder.com/300x200?text=无图片", width='stretch')
 
         st.divider()
@@ -681,7 +690,9 @@ def show_size_add():
         col_s, col_b = st.columns(2)
         with col_s:
             submitted = st.form_submit_button("💾 保存基本信息", width='stretch')
+            submitted = st.form_submit_button("💾 保存基本信息", width='stretch')
         with col_b:
+            back = st.form_submit_button("取消并返回", width='stretch')
             back = st.form_submit_button("取消并返回", width='stretch')
 
         if back:
