@@ -20,7 +20,7 @@
 ```python
 import streamlit as st
 
-st.title("🧵 布料档案管家")
+st.title("🧵 小天裁 缝纫管家")
 uploaded_file = st.file_uploader("上传订单截图", type=['png', 'jpg'])
 
 if uploaded_file:
