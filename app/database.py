@@ -57,8 +57,12 @@ def init_database():
             made_date DATE,
             notes TEXT,
             used_length REAL,
+            used_fabric_name TEXT,
+            pattern_id INTEGER,
+            pattern_name_snapshot TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE
+            FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE,
+            FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE SET NULL
         )
     """)
 
@@ -67,6 +71,12 @@ def init_database():
     garment_columns = {row[1] for row in cursor.fetchall()}
     if "used_length" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    if "used_fabric_name" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN used_fabric_name TEXT")
+    if "pattern_id" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_id INTEGER")
+    if "pattern_name_snapshot" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_name_snapshot TEXT")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -86,11 +96,32 @@ def init_database():
             name TEXT NOT NULL,
             height_cm REAL,
             weight_kg REAL,
+            bust_cm REAL,
+            waist_cm REAL,
+            hip_cm REAL,
+            arm_length_cm REAL,
+            garment_length_cm REAL,
+            leg_length_cm REAL,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # 兼容历史数据库：补齐 size_profiles 新增字段
+    cursor.execute("PRAGMA table_info(size_profiles)")
+    size_profile_columns = {row[1] for row in cursor.fetchall()}
+    size_profile_new_columns = [
+        ("bust_cm", "REAL"),
+        ("waist_cm", "REAL"),
+        ("hip_cm", "REAL"),
+        ("arm_length_cm", "REAL"),
+        ("garment_length_cm", "REAL"),
+        ("leg_length_cm", "REAL"),
+    ]
+    for column_name, column_type in size_profile_new_columns:
+        if column_name not in size_profile_columns:
+            cursor.execute(f"ALTER TABLE size_profiles ADD COLUMN {column_name} {column_type}")
 
     conn.commit()
     conn.close()
@@ -161,7 +192,13 @@ def get_fabric_by_id(fabric_id):
     if fabric:
         fabric = dict(fabric)
         # 获取关联的成衣
-        cursor.execute("SELECT * FROM garments WHERE fabric_id = ? ORDER BY made_date DESC", (fabric_id,))
+        cursor.execute("""
+            SELECT g.*, COALESCE(g.pattern_name_snapshot, p.name) AS pattern_display_name
+            FROM garments g
+            LEFT JOIN patterns p ON g.pattern_id = p.id
+            WHERE g.fabric_id = ?
+            ORDER BY g.made_date DESC
+        """, (fabric_id,))
         fabric['garments'] = [dict(row) for row in cursor.fetchall()]
     
     conn.close()
@@ -235,7 +272,17 @@ def delete_fabric(fabric_id):
         conn.close()
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None):
+def add_garment(
+    fabric_id,
+    name=None,
+    image_path=None,
+    made_date=None,
+    notes=None,
+    used_length=None,
+    used_fabric_name=None,
+    pattern_id=None,
+    pattern_name_snapshot=None,
+):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -272,9 +319,22 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         )
 
         cursor.execute("""
-            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec)))
+            INSERT INTO garments (
+                fabric_id, name, image_path, made_date, notes, used_length,
+                used_fabric_name, pattern_id, pattern_name_snapshot
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            fabric_id,
+            name,
+            image_path,
+            made_date,
+            notes,
+            float(used_length_dec),
+            used_fabric_name,
+            pattern_id,
+            pattern_name_snapshot,
+        ))
 
         garment_id = cursor.lastrowid
         conn.commit()
@@ -402,13 +462,30 @@ def delete_pattern(pattern_id):
 
 # ==================== 尺码档案 Size Profiles ====================
 
-def add_size_profile(name, height_cm=None, weight_kg=None, description=None):
+def add_size_profile(
+    name,
+    height_cm=None,
+    weight_kg=None,
+    bust_cm=None,
+    waist_cm=None,
+    hip_cm=None,
+    arm_length_cm=None,
+    garment_length_cm=None,
+    leg_length_cm=None,
+    description=None,
+):
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO size_profiles (name, height_cm, weight_kg, description)
-        VALUES (?, ?, ?, ?)
-    """, (name, height_cm, weight_kg, description))
+        INSERT INTO size_profiles (
+            name, height_cm, weight_kg, bust_cm, waist_cm, hip_cm,
+            arm_length_cm, garment_length_cm, leg_length_cm, description
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        name, height_cm, weight_kg, bust_cm, waist_cm, hip_cm,
+        arm_length_cm, garment_length_cm, leg_length_cm, description
+    ))
     profile_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -444,7 +521,10 @@ def get_size_profile_by_id(profile_id):
 
 
 def update_size_profile(profile_id, **kwargs):
-    allowed_fields = ["name", "height_cm", "weight_kg", "description"]
+    allowed_fields = [
+        "name", "height_cm", "weight_kg", "bust_cm", "waist_cm", "hip_cm",
+        "arm_length_cm", "garment_length_cm", "leg_length_cm", "description"
+    ]
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
     if not updates:
         return False
@@ -519,13 +599,14 @@ def import_from_json(data):
         # 导入布料
         for fabric in data.get("fabrics", []):
             cursor.execute("""
-                INSERT INTO fabrics (id, name, length, width, shop, price, 
+                INSERT INTO fabrics (id, name, length, original_length, width, shop, price,
                     fabric_image_path, order_image_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 fabric.get("id"),
                 fabric.get("name"),
                 fabric.get("length"),
+                fabric.get("original_length", fabric.get("length")),
                 fabric.get("width"),
                 fabric.get("shop"),
                 fabric.get("price"),
@@ -538,8 +619,11 @@ def import_from_json(data):
         # 导入成衣
         for garment in data.get("garments", []):
             cursor.execute("""
-                INSERT INTO garments (id, fabric_id, name, image_path, made_date, notes, used_length, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO garments (
+                    id, fabric_id, name, image_path, made_date, notes, used_length,
+                    used_fabric_name, pattern_id, pattern_name_snapshot, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 garment.get("id"),
                 garment.get("fabric_id"),
@@ -548,6 +632,9 @@ def import_from_json(data):
                 garment.get("made_date"),
                 garment.get("notes"),
                 garment.get("used_length"),
+                garment.get("used_fabric_name"),
+                garment.get("pattern_id"),
+                garment.get("pattern_name_snapshot"),
                 garment.get("created_at")
             ))
 
@@ -568,13 +655,22 @@ def import_from_json(data):
         # 导入尺码档案
         for sp in data.get("size_profiles", []):
             cursor.execute("""
-                INSERT INTO size_profiles (id, name, height_cm, weight_kg, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO size_profiles (
+                    id, name, height_cm, weight_kg, bust_cm, waist_cm, hip_cm,
+                    arm_length_cm, garment_length_cm, leg_length_cm, description, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sp.get("id"),
                 sp.get("name"),
                 sp.get("height_cm"),
                 sp.get("weight_kg"),
+                sp.get("bust_cm"),
+                sp.get("waist_cm"),
+                sp.get("hip_cm"),
+                sp.get("arm_length_cm"),
+                sp.get("garment_length_cm"),
+                sp.get("leg_length_cm"),
                 sp.get("description"),
                 sp.get("created_at"),
                 sp.get("updated_at")
