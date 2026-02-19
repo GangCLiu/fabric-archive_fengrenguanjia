@@ -59,7 +59,6 @@ def init_database():
             notes TEXT,
             used_length REAL,
             used_fabric_name TEXT,
-            pattern_id INTEGER,
             pattern_name_snapshot TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (fabric_id) REFERENCES fabrics(id) ON DELETE CASCADE,
@@ -72,8 +71,12 @@ def init_database():
     garment_columns = {row[1] for row in cursor.fetchall()}
     if "used_length" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN used_length REAL")
+    if "used_fabric_name" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN used_fabric_name TEXT")
     if "pattern_id" not in garment_columns:
         cursor.execute("ALTER TABLE garments ADD COLUMN pattern_id INTEGER")
+    if "pattern_name_snapshot" not in garment_columns:
+        cursor.execute("ALTER TABLE garments ADD COLUMN pattern_name_snapshot TEXT")
         # 纸样表
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patterns (
@@ -269,7 +272,7 @@ def delete_fabric(fabric_id):
         conn.close()
 
 
-def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None, pattern_id=None):
+def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=None, used_length=None, pattern_id=None, used_fabric_name=None, pattern_name_snapshot=None):
     """添加成衣记录"""
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
@@ -306,9 +309,22 @@ def add_garment(fabric_id, name=None, image_path=None, made_date=None, notes=Non
         )
 
         cursor.execute("""
-            INSERT INTO garments (fabric_id, name, image_path, made_date, notes, used_length, pattern_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (fabric_id, name, image_path, made_date, notes, float(used_length_dec), pattern_id))
+            INSERT INTO garments (
+                fabric_id, name, image_path, made_date, notes, used_length,
+                used_fabric_name, pattern_id, pattern_name_snapshot
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            fabric_id,
+            name,
+            image_path,
+            made_date,
+            notes,
+            float(used_length_dec),
+            used_fabric_name,
+            pattern_id,
+            pattern_name_snapshot,
+        ))
 
         garment_id = cursor.lastrowid
         conn.commit()
@@ -353,6 +369,100 @@ def delete_garment(garment_id):
         conn.close()
 
 
+def update_garment(garment_id, **kwargs):
+    """更新成衣信息，并在布料变更/用量变更时同步剩余长度。"""
+    allowed_fields = [
+        "fabric_id", "pattern_id", "name", "image_path", "made_date", "notes",
+        "used_length", "used_fabric_name", "pattern_name_snapshot"
+    ]
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    if not updates:
+        return False
+
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT fabric_id, used_length FROM garments WHERE id = ?", (garment_id,))
+        old_row = cursor.fetchone()
+        if not old_row:
+            return False
+
+        old_fabric_id, old_used_length = old_row
+        old_used_dec = _normalize_length(old_used_length or 0)
+
+        new_fabric_id = updates.get("fabric_id", old_fabric_id)
+        new_used_raw = updates.get("used_length", old_used_length)
+        new_used_dec = _normalize_length(new_used_raw or 0)
+
+        if new_used_dec < 0:
+            raise ValueError("使用布长不能为负数")
+
+        # 处理布料扣减：先归还旧布料，再从新布料扣减
+        if (new_fabric_id != old_fabric_id) or (new_used_dec != old_used_dec):
+            # 查询旧布料剩余长度
+            cursor.execute("SELECT length FROM fabrics WHERE id = ?", (old_fabric_id,))
+            old_fabric = cursor.fetchone()
+            if not old_fabric:
+                raise ValueError("原布料不存在")
+            if old_fabric[0] is None:
+                raise ValueError("原布料没有可扣减的剩余长度")
+
+            old_current_dec = _normalize_length(old_fabric[0])
+            old_restored_dec = _normalize_length(old_current_dec + old_used_dec)
+
+            # 查询新布料剩余长度
+            cursor.execute("SELECT length FROM fabrics WHERE id = ?", (new_fabric_id,))
+            new_fabric = cursor.fetchone()
+            if not new_fabric:
+                raise ValueError("新布料不存在")
+            if new_fabric[0] is None:
+                raise ValueError("目标布料没有可扣减的剩余长度")
+
+            if new_fabric_id == old_fabric_id:
+                available_dec = old_restored_dec
+                if new_used_dec > available_dec:
+                    raise ValueError("使用布长不能超过当前剩余长度")
+                new_remaining_dec = _normalize_length(available_dec - new_used_dec)
+                cursor.execute(
+                    "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (float(new_remaining_dec), old_fabric_id)
+                )
+            else:
+                new_current_dec = _normalize_length(new_fabric[0])
+                if new_used_dec > new_current_dec:
+                    raise ValueError("使用布长不能超过目标布料当前剩余长度")
+
+                # 先归还旧布料
+                cursor.execute(
+                    "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (float(old_restored_dec), old_fabric_id)
+                )
+                # 再扣减新布料
+                new_remaining_dec = _normalize_length(new_current_dec - new_used_dec)
+                cursor.execute(
+                    "UPDATE fabrics SET length = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (float(new_remaining_dec), new_fabric_id)
+                )
+
+            updates["used_length"] = float(new_used_dec)
+
+        if "used_length" in updates and updates["used_length"] is not None:
+            updates["used_length"] = float(_normalize_length(updates["used_length"]))
+
+        set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+        values = list(updates.values()) + [garment_id]
+
+        cursor.execute(f"UPDATE garments SET {set_clause} WHERE id = ?", values)
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
     """获取成衣列表，含关联布料与纸样信息。"""
     conn = sqlite3.connect(DATABASE_PATH)
@@ -376,9 +486,10 @@ def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
             g.made_date,
             g.notes,
             g.used_length,
+            g.used_fabric_name,
             g.created_at,
             f.name AS fabric_name,
-            p.name AS pattern_name
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
         FROM garments g
         LEFT JOIN fabrics f ON g.fabric_id = f.id
         LEFT JOIN patterns p ON g.pattern_id = p.id
@@ -403,6 +514,38 @@ def get_all_garments(search=None, sort_by="created_at", sort_order="DESC"):
     garments = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return garments
+
+
+def get_garment_by_id(garment_id):
+    """获取单条成衣详情，含关联布料与纸样显示名。"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            g.id,
+            g.fabric_id,
+            g.pattern_id,
+            g.name,
+            g.image_path,
+            g.made_date,
+            g.notes,
+            g.used_length,
+            g.used_fabric_name,
+            g.pattern_name_snapshot,
+            g.created_at,
+            f.name AS fabric_name,
+            COALESCE(g.pattern_name_snapshot, p.name) AS pattern_name
+        FROM garments g
+        LEFT JOIN fabrics f ON g.fabric_id = f.id
+        LEFT JOIN patterns p ON g.pattern_id = p.id
+        WHERE g.id = ?
+    """, (garment_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_all_shops():
