@@ -850,6 +850,16 @@ def show_size_list():
             h = sp.get("height_cm")
             w = sp.get("weight_kg")
             st.write(f"身高: {h if h is not None else '-'} cm，体重: {w if w is not None else '-'} kg")
+            st.write(
+                f"胸围: {sp.get('bust_cm') if sp.get('bust_cm') is not None else '-'} cm，"
+                f"腰围: {sp.get('waist_cm') if sp.get('waist_cm') is not None else '-'} cm，"
+                f"臀围: {sp.get('hip_cm') if sp.get('hip_cm') is not None else '-'} cm"
+            )
+            st.write(
+                f"臂长: {sp.get('arm_length_cm') if sp.get('arm_length_cm') is not None else '-'} cm，"
+                f"衣长: {sp.get('garment_length_cm') if sp.get('garment_length_cm') is not None else '-'} cm，"
+                f"腿长: {sp.get('leg_length_cm') if sp.get('leg_length_cm') is not None else '-'} cm"
+            )
             if sp.get("description"):
                 st.write(sp["description"])
         with col2:
@@ -873,8 +883,14 @@ def show_size_add():
         col1, col2 = st.columns(2)
         with col1:
             height_cm = st.number_input("身高 cm", min_value=0, step=1)
+            bust_cm = st.number_input("胸围 cm", min_value=0.0, step=0.1)
+            hip_cm = st.number_input("臀围 cm", min_value=0.0, step=0.1)
+            garment_length_cm = st.number_input("衣长 cm", min_value=0.0, step=0.1)
         with col2:
             weight_kg = st.number_input("体重 kg", min_value=0.0, step=0.1)
+            waist_cm = st.number_input("腰围 cm", min_value=0.0, step=0.1)
+            arm_length_cm = st.number_input("臂长 cm", min_value=0.0, step=0.1)
+            leg_length_cm = st.number_input("腿长 cm", min_value=0.0, step=0.1)
 
         description = st.text_area("描述", placeholder="例如：偏瘦，肩略宽，喜欢宽松版型")
 
@@ -895,8 +911,25 @@ def show_size_add():
 
             h_val = int(height_cm) if height_cm and height_cm > 0 else None
             w_val = float(weight_kg) if weight_kg and weight_kg > 0 else None
+            bust_val = float(bust_cm) if bust_cm and bust_cm > 0 else None
+            waist_val = float(waist_cm) if waist_cm and waist_cm > 0 else None
+            hip_val = float(hip_cm) if hip_cm and hip_cm > 0 else None
+            arm_len_val = float(arm_length_cm) if arm_length_cm and arm_length_cm > 0 else None
+            garment_len_val = float(garment_length_cm) if garment_length_cm and garment_length_cm > 0 else None
+            leg_len_val = float(leg_length_cm) if leg_length_cm and leg_length_cm > 0 else None
 
-            sid = add_size_profile(name=name, height_cm=h_val, weight_kg=w_val, description=description or None)
+            sid = add_size_profile(
+                name=name,
+                height_cm=h_val,
+                weight_kg=w_val,
+                bust_cm=bust_val,
+                waist_cm=waist_val,
+                hip_cm=hip_val,
+                arm_length_cm=arm_len_val,
+                garment_length_cm=garment_len_val,
+                leg_length_cm=leg_len_val,
+                description=description or None,
+            )
             st.success(f"✅ 尺码档案已保存，ID: {sid}")
             st.session_state.page = "size_list"
             st.rerun()
@@ -927,8 +960,14 @@ def show_size_detail():
         col1, col2 = st.columns(2)
         with col1:
             new_height = st.number_input("身高 cm", min_value=0, step=1, value=int(sp.get("height_cm") or 0))
+            new_bust = st.number_input("胸围 cm", min_value=0.0, step=0.1, value=float(sp.get("bust_cm") or 0.0))
+            new_hip = st.number_input("臀围 cm", min_value=0.0, step=0.1, value=float(sp.get("hip_cm") or 0.0))
+            new_garment_length = st.number_input("衣长 cm", min_value=0.0, step=0.1, value=float(sp.get("garment_length_cm") or 0.0))
         with col2:
             new_weight = st.number_input("体重 kg", min_value=0.0, step=0.1, value=float(sp.get("weight_kg") or 0.0))
+            new_waist = st.number_input("腰围 cm", min_value=0.0, step=0.1, value=float(sp.get("waist_cm") or 0.0))
+            new_arm_length = st.number_input("臂长 cm", min_value=0.0, step=0.1, value=float(sp.get("arm_length_cm") or 0.0))
+            new_leg_length = st.number_input("腿长 cm", min_value=0.0, step=0.1, value=float(sp.get("leg_length_cm") or 0.0))
 
         new_desc = st.text_area("描述", value=sp.get("description") or "")
 
@@ -939,8 +978,26 @@ def show_size_detail():
 
             h_val = int(new_height) if new_height and new_height > 0 else None
             w_val = float(new_weight) if new_weight and new_weight > 0 else None
+            bust_val = float(new_bust) if new_bust and new_bust > 0 else None
+            waist_val = float(new_waist) if new_waist and new_waist > 0 else None
+            hip_val = float(new_hip) if new_hip and new_hip > 0 else None
+            arm_len_val = float(new_arm_length) if new_arm_length and new_arm_length > 0 else None
+            garment_len_val = float(new_garment_length) if new_garment_length and new_garment_length > 0 else None
+            leg_len_val = float(new_leg_length) if new_leg_length and new_leg_length > 0 else None
 
-            update_size_profile(sid, name=new_name, height_cm=h_val, weight_kg=w_val, description=new_desc or None)
+            update_size_profile(
+                sid,
+                name=new_name,
+                height_cm=h_val,
+                weight_kg=w_val,
+                bust_cm=bust_val,
+                waist_cm=waist_val,
+                hip_cm=hip_val,
+                arm_length_cm=arm_len_val,
+                garment_length_cm=garment_len_val,
+                leg_length_cm=leg_len_val,
+                description=new_desc or None,
+            )
             st.success("✅ 已保存修改")
             st.rerun()
 
