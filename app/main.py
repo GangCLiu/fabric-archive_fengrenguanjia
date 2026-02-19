@@ -361,6 +361,8 @@ def show_fabric_detail():
                         st.write(f"**{garment.get('name', '未命名作品')}**")
                         st.write(f"制作日期: {format_date(garment.get('made_date'))}")
                         st.write(f"使用布长: {format_length(garment.get('used_length'))}")
+                        if garment.get('pattern_name'):
+                            st.write(f"关联纸样: {garment.get('pattern_name')}")
                         if garment.get('notes'):
                             st.write(f"备注: {garment['notes']}")
                         if st.button("删除", key=f"del_g_{garment['id']}"):
@@ -383,6 +385,10 @@ def show_fabric_detail():
                 g_date = st.date_input("制作日期", datetime.now())
                 g_notes = st.text_area("备注")
                 g_used_length = st.number_input("使用布长（米）", min_value=0.0, step=0.1)
+                all_patterns = get_all_patterns()
+                pattern_options = {"不关联纸样": None}
+                pattern_options.update({pat["name"]: pat["id"] for pat in all_patterns})
+                selected_pattern = st.selectbox("关联纸样（可选）", list(pattern_options.keys()))
 
                 col_submit, col_cancel = st.columns(2)
                 with col_submit:
@@ -410,7 +416,8 @@ def show_fabric_detail():
                                     image_path=compressed,
                                     made_date=g_date.isoformat(),
                                     notes=g_notes or None,
-                                    used_length=g_used_length
+                                    used_length=g_used_length,
+                                    pattern_id=pattern_options[selected_pattern]
                                 )
                             except ValueError as e:
                                 st.error(str(e))
@@ -495,6 +502,7 @@ def show_pattern_list():
                 st.subheader(p["name"][:20] + "..." if len(p["name"]) > 20 else p["name"])
                 if p.get("notes"):
                     st.write(p["notes"][:60] + "..." if len(p["notes"]) > 60 else p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
 
                 if st.button("查看详情", key=f"pat_view_{p['id']}"):
@@ -514,6 +522,7 @@ def show_pattern_list():
                 st.write(f"**{p['name']}**")
                 if p.get("notes"):
                     st.write(p["notes"])
+                st.write(f"被使用 {p.get('usage_count', 0)} 次")
                 st.write(f"🕒 {format_date(p.get('created_at'))}")
             with col3:
                 if st.button("详情", key=f"pat_list_view_{p['id']}"):
@@ -589,17 +598,21 @@ def show_pattern_detail():
         confirm_del = st.checkbox("确认删除该纸样")
         if st.button("🗑️ 删除该纸样", type="secondary", width='stretch'):
             if confirm_del:
-                delete_pattern(pattern_id)
-                st.success("已删除")
-                st.session_state.page = "pattern_list"
-                st.session_state.pop("pattern_id", None)
-                st.rerun()
+                deleted, message = delete_pattern(pattern_id)
+                if deleted:
+                    st.success(message)
+                    st.session_state.page = "pattern_list"
+                    st.session_state.pop("pattern_id", None)
+                    st.rerun()
+                else:
+                    st.warning(message)
             else:
                 st.error("请先勾选确认删除")
 
     with col2:
         st.subheader("📋 信息")
         st.write(f"录入时间: {format_date(p.get('created_at'))}")
+        st.write(f"被使用 {p.get('usage_count', 0)} 次")
 
         st.divider()
         st.subheader("✏️ 编辑")
