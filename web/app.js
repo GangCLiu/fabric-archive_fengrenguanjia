@@ -26,7 +26,19 @@ function init() {
   load();
   ensureOriginalLengthAndRecalculate();
   renderNav();
+  setupUsageToggle();
   route(state.page);
+}
+
+function setupUsageToggle() {
+  const usage = document.querySelector('.usage');
+  const toggle = $('#usageToggle');
+  if (!usage || !toggle) return;
+  toggle.onclick = () => {
+    const collapsed = usage.classList.toggle('collapsed');
+    toggle.textContent = collapsed ? '展开' : '收起';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  };
 }
 
 function renderNav() {
