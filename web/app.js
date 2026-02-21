@@ -173,7 +173,7 @@ function showFabricForm(f) {
   <form id='fabricForm' class='form-grid'>
   <label class='field'><span>布料名称</span><input name='name' placeholder='布料名称*' value='${esc(f?.name||'')}' required /></label>
   <label class='field'><span>店铺</span><input name='shop' placeholder='店铺' value='${esc(f?.shop||'')}' /></label>
-  <label class='field'><span>长度(米)</span><input name='length' type='number' min='0' step='0.1' placeholder='长度(米)' value='${f?.length??''}' /></label>
+  <label class='field'><span>原长(米)</span><input name='length' type='number' min='0' step='0.1' placeholder='原长(米)' value='${f?.originalLength ?? f?.length ?? ''}' /></label>
   <label class='field'><span>幅宽(cm)</span><input name='width' type='number' min='0' step='1' placeholder='幅宽(cm)' value='${f?.width??''}' /></label>
   <label class='field'><span>价格(元)</span><input name='price' type='number' min='0' step='0.01' placeholder='价格(元)' value='${f?.price??''}' /></label>
   <label class='field'><span>布料图片</span><input id='fabricImageInput' name='image' type='file' accept='image/*' /></label>
