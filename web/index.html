@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小天裁 缝纫管家（JavaScript 版）</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <h1>🧵 小天裁缝纫管家</h1>
+        <nav id="navMenu" class="nav"></nav>
+        <section class="usage">
+          <h3>📝 使用说明</h3>
+          <ol>
+            <li>在布料列表点击“去添加布料”</li>
+            <li>支持网格/列表视图</li>
+            <li>可管理成衣、纸样、尺码档案</li>
+            <li>定期在“数据备份”导出 JSON</li>
+          </ol>
+        </section>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <h2 id="pageTitle"></h2>
+        </header>
+        <section id="app"></section>
+      </main>
+    </div>
+
+    <template id="fabricCardTpl">
+      <article class="card-item">
+        <img class="thumb" alt="fabric" />
+        <h4 class="title"></h4>
+        <p class="line1"></p>
+        <p class="line2"></p>
+        <div class="row actions"></div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
