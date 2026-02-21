@@ -9,11 +9,20 @@
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <h1 class="logo">🧵 小天裁缝纫管家</h1>
+        <div class="sidebar-header">
+          <h1 class="logo">🧵 小天裁缝纫管家</h1>
+          <div class="sidebar-controls">
+            <button id="menuToggle" class="ghost sidebar-toggle" type="button" aria-label="切换菜单" title="切换菜单" aria-expanded="true">^</button>
+            <button id="sidebarToggle" class="ghost sidebar-toggle" type="button" aria-label="切换全部" title="切换全部" aria-expanded="true">^</button>
+          </div>
+        </div>
         <nav id="navMenu" class="nav"></nav>
         <section class="usage" aria-label="使用说明">
-          <h3>📝 使用说明</h3>
-          <ol>
+          <div class="usage-header">
+            <h3>📝 使用说明</h3>
+            <button id="usageToggle" class="ghost usage-toggle" type="button" aria-label="切换使用说明" title="切换使用说明" aria-expanded="true">^</button>
+          </div>
+          <ol id="usageList">
             <li>在布料列表点击“去添加布料”</li>
             <li>支持网格/列表视图</li>
             <li>可管理成衣、纸样、尺码档案</li>
