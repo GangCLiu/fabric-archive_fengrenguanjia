@@ -205,7 +205,8 @@ function renderGarments() {
   const q = state.search.garments.toLowerCase();
   const rows = state.data.garments.filter((g)=>`${g.name} ${fabricName(g.fabricId)} ${g.notes||''}`.toLowerCase().includes(q));
   app.innerHTML = `<section class='panel toolbar'><input id='searchG' placeholder='搜索成衣/布料/备注' value='${esc(state.search.garments)}' /><button id='addG'>新增成衣</button></section>
-  <section class='panel'><table class='table'><thead><tr><th>图片</th><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>纸样</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>`;
+  <section class='panel'><table class='table'><thead><tr><th>图片</th><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>纸样</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>
+  <section id='editPanel'></section>`;
   $('#searchG').oninput=(e)=>{state.search.garments=e.target.value;renderGarments();};
   $('#addG').onclick=()=>showGarmentForm();
   const tb = $('#gBody');
@@ -221,10 +222,11 @@ function renderGarments() {
 function showGarmentForm(g, defaultFabricId='') {
   const fabrics = state.data.fabrics;
   if (!fabrics.length) return alert('请先添加布料');
-  const oldPanel = document.querySelector('#garmentEditor');
-  if (oldPanel) oldPanel.remove();
+  const panel = $('#editPanel');
+  if (!panel) return;
   const options = fabrics.map((f)=>`<option value='${f.id}' ${(g?.fabricId||defaultFabricId)===f.id?'selected':''}>${esc(f.name)}</option>`).join('');
-  app.insertAdjacentHTML('beforeend', `<section id='garmentEditor' class='panel'><h3>${g?'编辑':'新增'}成衣</h3><form id='gForm' class='form-grid'>
+  panel.className = 'panel';
+  panel.innerHTML = `<h3>${g?'编辑':'新增'}成衣</h3><form id='gForm' class='form-grid'>
   <label class='field'><span>成衣名称</span><input name='name' placeholder='成衣名称' value='${esc(g?.name||'')}' /></label>
   <label class='field'><span>制作日期</span><input name='madeDate' type='date' value='${esc(g?.madeDate||new Date().toISOString().slice(0,10))}' /></label>
   <label class='field'><span>使用布长(米)</span><input name='usedLength' type='number' min='0' step='0.1' placeholder='使用布长(米)' value='${g?.usedLength??''}' /></label>
@@ -233,8 +235,8 @@ function showGarmentForm(g, defaultFabricId='') {
   <label class='field'><span>成衣图片</span><input id='garmentImageInput' name='image' type='file' accept='image/*' /></label>
   <div class='image-preview-wrap'><img id='garmentImagePreview' class='image-preview ${g?.image ? '' : 'hidden'}' src='${esc(g?.image||'')}' alt='成衣图片预览' data-preview-image /><div id='garmentImageTip' class='preview-tip ${g?.image ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div>
   <label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc(g?.notes||'')}</textarea></label>
-  <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form></section>`);
-  $('#closeG').onclick=()=>$('#garmentEditor').remove();
+  <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form>`;
+  $('#closeG').onclick=()=>{panel.className='';panel.innerHTML='';};
   setupImagePreview('#garmentImageInput','#garmentImagePreview','#garmentImageTip');
   $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=fabric?.originalLength!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,g?.id):fabric?.length;if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};const oldFabricId=g?.fabricId||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);save();route('garments');};
 }
@@ -265,7 +267,7 @@ function ensureOriginalLengthAndRecalculate(){
 function renderPatterns() {
   const q=state.search.patterns.toLowerCase();
   const rows=state.data.patterns.filter((p)=>(`${p.name} ${p.notes||''}`).toLowerCase().includes(q));
-  app.innerHTML=`<section class='panel toolbar'><input id='searchP' placeholder='搜索纸样' value='${esc(state.search.patterns)}'/><select id='viewP'><option value='grid' ${state.view.patterns==='grid'?'selected':''}>网格</option><option value='list' ${state.view.patterns==='list'?'selected':''}>列表</option></select><button id='addP'>去添加纸样</button></section><section class='panel'><p>找到 ${rows.length} 个纸样</p><div class='${state.view.patterns==='grid'?'grid':'list'}' id='pList'></div></section>`;
+  app.innerHTML=`<section class='panel toolbar'><input id='searchP' placeholder='搜索纸样' value='${esc(state.search.patterns)}'/><select id='viewP'><option value='grid' ${state.view.patterns==='grid'?'selected':''}>网格</option><option value='list' ${state.view.patterns==='list'?'selected':''}>列表</option></select><button id='addP'>去添加纸样</button></section><section class='panel'><p>找到 ${rows.length} 个纸样</p><div class='${state.view.patterns==='grid'?'grid':'list'}' id='pList'></div></section><section id='editPanel'></section>`;
   $('#searchP').oninput=(e)=>{state.search.patterns=e.target.value;renderPatterns();};
   $('#viewP').onchange=(e)=>{state.view.patterns=e.target.value;renderPatterns();};
   $('#addP').onclick=()=>showPatternForm();
@@ -273,25 +275,40 @@ function renderPatterns() {
   rows.forEach((p)=>{const d=document.createElement('article');d.className='card-item';d.innerHTML=`<img class='thumb' src='${p.image||IMG_EMPTY}'/><h4 class='title'>${esc(p.name)}</h4><p class='line1'>被使用 ${state.data.garments.filter(g=>g.patternId===p.id).length} 次</p><p class='line2'>${esc(p.notes||'')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;d.querySelectorAll('button')[0].onclick=()=>showPatternForm(p);d.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除纸样？')){state.data.patterns=state.data.patterns.filter(x=>x.id!==p.id);state.data.garments.forEach(g=>{if(g.patternId===p.id)g.patternId=null});save();renderPatterns();}};box.appendChild(d);});
 }
 
-function showPatternForm(p){app.insertAdjacentHTML('beforeend',`<section class='panel'><h3>${p?'编辑':'新增'}纸样</h3><form id='pForm' class='form-grid'><label class='field'><span>纸样名称</span><input name='name' value='${esc(p?.name||'')}' placeholder='纸样名称*' required/></label><label class='field'><span>纸样图片</span><input id='patternImageInput' name='image' type='file' accept='image/*'/></label><div class='image-preview-wrap'><img id='patternImagePreview' class='image-preview ${p?.image ? '' : 'hidden'}' src='${esc(p?.image||'')}' alt='纸样图片预览' data-preview-image /><div id='patternImageTip' class='preview-tip ${p?.image ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div><label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc(p?.notes||'')}</textarea></label><div class='row'><button>保存</button><button id='closeP' type='button' class='ghost'>取消</button></div></form></section>`);setupImagePreview('#patternImageInput','#patternImagePreview','#patternImageTip');$('#closeP').onclick=()=>$('#closeP').closest('.panel').remove();$('#pForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):p?.image||'';upsert(state.data.patterns,{id:p?.id||id(),name:val(fd,'name'),notes:val(fd,'notes'),image,createdAt:p?.createdAt||new Date().toISOString()});save();route('patterns');};}
+function showPatternForm(p){
+  const panel = $('#editPanel');
+  if (!panel) return;
+  panel.className = 'panel';
+  panel.innerHTML=`<h3>${p?'编辑':'新增'}纸样</h3><form id='pForm' class='form-grid'><label class='field'><span>纸样名称</span><input name='name' value='${esc(p?.name||'')}' placeholder='纸样名称*' required/></label><label class='field'><span>纸样图片</span><input id='patternImageInput' name='image' type='file' accept='image/*'/></label><div class='image-preview-wrap'><img id='patternImagePreview' class='image-preview ${p?.image ? '' : 'hidden'}' src='${esc(p?.image||'')}' alt='纸样图片预览' data-preview-image /><div id='patternImageTip' class='preview-tip ${p?.image ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div><label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc(p?.notes||'')}</textarea></label><div class='row'><button>保存</button><button id='closeP' type='button' class='ghost'>取消</button></div></form>`;
+  setupImagePreview('#patternImageInput','#patternImagePreview','#patternImageTip');
+  $('#closeP').onclick=()=>{panel.className='';panel.innerHTML='';};
+  $('#pForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):p?.image||'';upsert(state.data.patterns,{id:p?.id||id(),name:val(fd,'name'),notes:val(fd,'notes'),image,createdAt:p?.createdAt||new Date().toISOString()});save();route('patterns');};
+}
 
 function renderSizes(){
   const q=state.search.sizes.toLowerCase();
   const rows=state.data.sizes.filter((s)=>JSON.stringify(s).toLowerCase().includes(q));
-  app.innerHTML=`<section class='panel toolbar'><input id='searchS' placeholder='搜索尺码档案' value='${esc(state.search.sizes)}'/><button id='addS'>新增尺码档案</button></section><section class='panel'><table class='table'><thead><tr><th>名称</th><th>身高/体重</th><th>三围</th><th>其它</th><th>操作</th></tr></thead><tbody id='sBody'></tbody></table></section>`;
+  app.innerHTML=`<section class='panel toolbar'><input id='searchS' placeholder='搜索尺码档案' value='${esc(state.search.sizes)}'/><button id='addS'>新增尺码档案</button></section><section class='panel'><table class='table'><thead><tr><th>名称</th><th>身高/体重</th><th>三围</th><th>其它</th><th>操作</th></tr></thead><tbody id='sBody'></tbody></table></section><section id='editPanel'></section>`;
   $('#searchS').oninput=(e)=>{state.search.sizes=e.target.value;renderSizes();};
   $('#addS').onclick=()=>showSizeForm();
   const b=$('#sBody');
   rows.forEach((s)=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${esc(s.name)}</td><td>${fmt(s.height_cm,'cm')} / ${fmt(s.weight_kg,'kg')}</td><td>胸${fmt(s.bust_cm,'')} 腰${fmt(s.waist_cm,'')} 臀${fmt(s.hip_cm,'')}</td><td>臂${fmt(s.arm_length_cm,'')} 衣${fmt(s.garment_length_cm,'')} 腿${fmt(s.leg_length_cm,'')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;tr.querySelectorAll('button')[0].onclick=()=>showSizeForm(s);tr.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除尺码档案？')){state.data.sizes=state.data.sizes.filter(x=>x.id!==s.id);save();renderSizes();}};b.appendChild(tr);});
 }
 
-function showSizeForm(s){app.insertAdjacentHTML('beforeend',`<section class='panel'><h3>${s?'编辑':'新增'}尺码档案</h3><form id='sForm' class='form-grid'>
+function showSizeForm(s){
+  const panel = $('#editPanel');
+  if (!panel) return;
+  panel.className = 'panel';
+  panel.innerHTML=`<h3>${s?'编辑':'新增'}尺码档案</h3><form id='sForm' class='form-grid'>
 <label class='field'><span>名称</span><input name='name' placeholder='名称*' required value='${esc(s?.name||'')}'/></label><label class='field'><span>身高(cm)</span><input name='height_cm' type='number' placeholder='身高(cm)' value='${s?.height_cm??''}'/></label>
 <label class='field'><span>体重(kg)</span><input name='weight_kg' type='number' step='0.1' placeholder='体重(kg)' value='${s?.weight_kg??''}'/></label><label class='field'><span>胸围(cm)</span><input name='bust_cm' type='number' step='0.1' placeholder='胸围(cm)' value='${s?.bust_cm??''}'/></label>
 <label class='field'><span>腰围(cm)</span><input name='waist_cm' type='number' step='0.1' placeholder='腰围(cm)' value='${s?.waist_cm??''}'/></label><label class='field'><span>臀围(cm)</span><input name='hip_cm' type='number' step='0.1' placeholder='臀围(cm)' value='${s?.hip_cm??''}'/></label>
 <label class='field'><span>臂长(cm)</span><input name='arm_length_cm' type='number' step='0.1' placeholder='臂长(cm)' value='${s?.arm_length_cm??''}'/></label><label class='field'><span>衣长(cm)</span><input name='garment_length_cm' type='number' step='0.1' placeholder='衣长(cm)' value='${s?.garment_length_cm??''}'/></label>
 <label class='field'><span>腿长(cm)</span><input name='leg_length_cm' type='number' step='0.1' placeholder='腿长(cm)' value='${s?.leg_length_cm??''}'/></label><label class='field'><span>描述</span><textarea name='description' placeholder='描述'>${esc(s?.description||'')}</textarea></label>
-<div class='row'><button>保存</button><button id='closeS' type='button' class='ghost'>取消</button></div></form></section>`);$('#closeS').onclick=()=>$('#closeS').closest('.panel').remove();$('#sForm').onsubmit=(e)=>{e.preventDefault();const fd=new FormData(e.target);upsert(state.data.sizes,{id:s?.id||id(),name:val(fd,'name'),height_cm:num(fd,'height_cm'),weight_kg:num(fd,'weight_kg'),bust_cm:num(fd,'bust_cm'),waist_cm:num(fd,'waist_cm'),hip_cm:num(fd,'hip_cm'),arm_length_cm:num(fd,'arm_length_cm'),garment_length_cm:num(fd,'garment_length_cm'),leg_length_cm:num(fd,'leg_length_cm'),description:val(fd,'description'),createdAt:s?.createdAt||new Date().toISOString()});save();route('sizes');};}
+<div class='row'><button>保存</button><button id='closeS' type='button' class='ghost'>取消</button></div></form>`;
+  $('#closeS').onclick=()=>{panel.className='';panel.innerHTML='';};
+  $('#sForm').onsubmit=(e)=>{e.preventDefault();const fd=new FormData(e.target);upsert(state.data.sizes,{id:s?.id||id(),name:val(fd,'name'),height_cm:num(fd,'height_cm'),weight_kg:num(fd,'weight_kg'),bust_cm:num(fd,'bust_cm'),waist_cm:num(fd,'waist_cm'),hip_cm:num(fd,'hip_cm'),arm_length_cm:num(fd,'arm_length_cm'),garment_length_cm:num(fd,'garment_length_cm'),leg_length_cm:num(fd,'leg_length_cm'),description:val(fd,'description'),createdAt:s?.createdAt||new Date().toISOString()});save();route('sizes');};
+}
 
 function renderBackup(){
   app.innerHTML=`<section class='panel'><h3>导出数据</h3><button id='exp'>导出为 JSON</button></section><section class='panel'><h3>导入数据</h3><input type='file' id='imp' accept='application/json'/><p id='sum'></p></section>`;
