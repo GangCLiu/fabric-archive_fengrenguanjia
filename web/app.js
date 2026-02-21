@@ -119,15 +119,15 @@ function renderGarments() {
   const q = state.search.garments.toLowerCase();
   const rows = state.data.garments.filter((g)=>`${g.name} ${fabricName(g.fabricId)} ${g.notes||''}`.toLowerCase().includes(q));
   app.innerHTML = `<section class='panel toolbar'><input id='searchG' placeholder='🔍 搜索成衣/布料/备注' value='${esc(state.search.garments)}' /><button id='addG'>➕ 新增成衣</button></section>
-  <section class='panel'><table class='table'><thead><tr><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>`;
+  <section class='panel'><table class='table'><thead><tr><th>图片</th><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>`;
   $('#searchG').oninput=(e)=>{state.search.garments=e.target.value;renderGarments();};
   $('#addG').onclick=()=>showGarmentForm();
   const tb = $('#gBody');
   rows.forEach((g)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
-    tr.children[4].children[0].onclick=()=>showGarmentForm(g);
-    tr.children[4].children[1].onclick=()=>{if(confirm('确认删除成衣？')){state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
+    tr.innerHTML=`<td><img src='${g.image||IMG_EMPTY}' alt='成衣图' style='width:72px;height:72px;object-fit:cover;border-radius:8px;background:#eef0f4'/></td><td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
+    tr.children[5].children[0].onclick=()=>showGarmentForm(g);
+    tr.children[5].children[1].onclick=()=>{if(confirm('确认删除成衣？')){state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
     tb.appendChild(tr);
   });
 }
@@ -135,18 +135,20 @@ function renderGarments() {
 function showGarmentForm(g, defaultFabricId='') {
   const fabrics = state.data.fabrics;
   if (!fabrics.length) return alert('请先添加布料');
-  const target = app;
+  const oldPanel = document.querySelector('#garmentEditor');
+  if (oldPanel) oldPanel.remove();
   const options = fabrics.map((f)=>`<option value='${f.id}' ${(g?.fabricId||defaultFabricId)===f.id?'selected':''}>${esc(f.name)}</option>`).join('');
-  target.insertAdjacentHTML('beforeend', `<section class='panel'><h3>${g?'编辑':'新增'}成衣</h3><form id='gForm' class='form-grid'>
+  app.insertAdjacentHTML('beforeend', `<section id='garmentEditor' class='panel'><h3>${g?'编辑':'新增'}成衣</h3><form id='gForm' class='form-grid'>
   <input name='name' placeholder='成衣名称' value='${esc(g?.name||'')}' />
   <input name='madeDate' type='date' value='${esc(g?.madeDate||new Date().toISOString().slice(0,10))}' />
   <input name='usedLength' type='number' min='0' step='0.1' placeholder='使用布长' value='${g?.usedLength??''}' />
   <select name='fabricId'>${options}</select>
   <select name='patternId'><option value=''>不关联纸样</option>${state.data.patterns.map((p)=>`<option value='${p.id}' ${p.id===g?.patternId?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
   <input name='image' type='file' accept='image/*' />
+  <div>${g?.image ? `<img src='${g.image}' alt='当前成衣图' style='width:120px;height:120px;object-fit:cover;border-radius:8px'/>` : '<span style="color:#687386">未上传图片</span>'}</div>
   <textarea name='notes' placeholder='备注'>${esc(g?.notes||'')}</textarea>
   <div class='row'><button type='submit'>💾 保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form></section>`);
-  $('#closeG').onclick=()=>$('#closeG').closest('.panel').remove();
+  $('#closeG').onclick=()=>$('#garmentEditor').remove();
   $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);if(used&&fabric?.length&&used>fabric.length){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};upsert(state.data.garments,rec);save();route('garments');};
 }
 
