@@ -119,15 +119,15 @@ function renderGarments() {
   const q = state.search.garments.toLowerCase();
   const rows = state.data.garments.filter((g)=>`${g.name} ${fabricName(g.fabricId)} ${g.notes||''}`.toLowerCase().includes(q));
   app.innerHTML = `<section class='panel toolbar'><input id='searchG' placeholder='🔍 搜索成衣/布料/备注' value='${esc(state.search.garments)}' /><button id='addG'>➕ 新增成衣</button></section>
-  <section class='panel'><table class='table'><thead><tr><th>图片</th><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>`;
+  <section class='panel'><table class='table'><thead><tr><th>图片</th><th>成衣</th><th>制作日期</th><th>用布</th><th>布料</th><th>纸样</th><th>操作</th></tr></thead><tbody id='gBody'></tbody></table></section>`;
   $('#searchG').oninput=(e)=>{state.search.garments=e.target.value;renderGarments();};
   $('#addG').onclick=()=>showGarmentForm();
   const tb = $('#gBody');
   rows.forEach((g)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><img src='${g.image||IMG_EMPTY}' alt='成衣图' style='width:72px;height:72px;object-fit:cover;border-radius:8px;background:#eef0f4'/></td><td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
-    tr.children[5].children[0].onclick=()=>showGarmentForm(g);
-    tr.children[5].children[1].onclick=()=>{if(confirm('确认删除成衣？')){state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
+    tr.innerHTML=`<td><img src='${g.image||IMG_EMPTY}' alt='成衣图' style='width:72px;height:72px;object-fit:cover;border-radius:8px;background:#eef0f4'/></td><td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td>${esc(patternName(g.patternId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
+    tr.children[6].children[0].onclick=()=>showGarmentForm(g);
+    tr.children[6].children[1].onclick=()=>{if(confirm('确认删除成衣？')){state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
     tb.appendChild(tr);
   });
 }
@@ -213,5 +213,7 @@ function num(fd,k){const n=Number(fd.get(k));return Number.isFinite(n)&&n>0?n:nu
 function fmt(v,u){return typeof v==='number'?`${v}${u}`:'-';}
 function fmtPrice(v){return typeof v==='number'?`¥${v.toFixed(2)}`:'-';}
 function fabricName(fid){return state.data.fabrics.find((f)=>f.id===fid)?.name||'';}
+
+function patternName(pid){return state.data.patterns.find((p)=>p.id===pid)?.name||'';}
 function esc(s){return String(s||'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function toDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=rej;r.readAsDataURL(file);});}
