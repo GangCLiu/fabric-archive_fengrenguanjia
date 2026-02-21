@@ -24,6 +24,7 @@ init();
 
 function init() {
   load();
+  ensureOriginalLengthAndRecalculate();
   renderNav();
   route(state.page);
 }
@@ -107,8 +108,13 @@ function showFabricForm(f) {
     const fd = new FormData(e.target);
     const img = fd.get('image');
     const image = img && img.size > 0 ? await toDataUrl(img) : f?.image || '';
-    const payload = { id: f?.id || id(), name: val(fd,'name'), shop: val(fd,'shop'), length:num(fd,'length'), width:num(fd,'width'), price:num(fd,'price'), image, createdAt: f?.createdAt || new Date().toISOString() };
+    const inputLength = num(fd,'length');
+    const payload = { id: f?.id || id(), name: val(fd,'name'), shop: val(fd,'shop'), length: inputLength, originalLength: inputLength, width:num(fd,'width'), price:num(fd,'price'), image, createdAt: f?.createdAt || new Date().toISOString() };
+    if (f && inputLength == null) {
+      payload.originalLength = f.originalLength ?? f.length ?? null;
+    }
     upsert(state.data.fabrics, payload);
+    recalculateFabricLength(payload.id);
     save();
     panel.innerHTML = '';
     renderHome();
@@ -127,7 +133,7 @@ function renderGarments() {
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><img src='${g.image||IMG_EMPTY}' alt='成衣图' style='width:72px;height:72px;object-fit:cover;border-radius:8px;background:#eef0f4'/></td><td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td>${esc(patternName(g.patternId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
     tr.children[6].children[0].onclick=()=>showGarmentForm(g);
-    tr.children[6].children[1].onclick=()=>{if(confirm('确认删除成衣？')){restoreUsedLengthToFabric(g);state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
+    tr.children[6].children[1].onclick=()=>{if(confirm('确认删除成衣？')){const oldFabricId=g.fabricId;state.data.garments=state.data.garments.filter(x=>x.id!==g.id);recalculateFabricLength(oldFabricId);save();renderGarments();}};
     tb.appendChild(tr);
   });
 }
@@ -149,23 +155,30 @@ function showGarmentForm(g, defaultFabricId='') {
   <textarea name='notes' placeholder='备注'>${esc(g?.notes||'')}</textarea>
   <div class='row'><button type='submit'>💾 保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form></section>`);
   $('#closeG').onclick=()=>$('#garmentEditor').remove();
-  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);if(g) restoreUsedLengthToFabric(g);if(used&&fabric?.length!=null&&used>fabric.length){if(g) applyUsedLengthToFabric(g);alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};applyUsedLengthToFabric(rec);upsert(state.data.garments,rec);save();route('garments');};
+  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=fabric?.originalLength!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,g?.id):fabric?.length;if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};const oldFabricId=g?.fabricId||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);save();route('garments');};
 }
 
-function applyUsedLengthToFabric(garment){
-  const used = Number(garment?.usedLength);
-  if (!(used > 0)) return;
-  const fabric = state.data.fabrics.find((f)=>f.id===garment.fabricId);
-  if (!fabric || fabric.length == null) return;
-  fabric.length = +Math.max(0, (Number(fabric.length) - used)).toFixed(2);
+function usedLengthSumByFabric(fabricId, excludeGarmentId = null){
+  return state.data.garments
+    .filter((g)=>g.fabricId===fabricId && g.id!==excludeGarmentId)
+    .reduce((sum,g)=>sum + (Number(g.usedLength)||0), 0);
 }
 
-function restoreUsedLengthToFabric(garment){
-  const used = Number(garment?.usedLength);
-  if (!(used > 0)) return;
-  const fabric = state.data.fabrics.find((f)=>f.id===garment.fabricId);
-  if (!fabric || fabric.length == null) return;
-  fabric.length = +(Number(fabric.length) + used).toFixed(2);
+function recalculateFabricLength(fabricId){
+  const fabric = state.data.fabrics.find((f)=>f.id===fabricId);
+  if (!fabric) return;
+  if (fabric.originalLength == null) return;
+  const used = usedLengthSumByFabric(fabricId);
+  fabric.length = +Math.max(0, Number(fabric.originalLength) - used).toFixed(2);
+}
+
+function ensureOriginalLengthAndRecalculate(){
+  state.data.fabrics.forEach((fabric)=>{
+    if (fabric.originalLength == null && fabric.length != null) {
+      fabric.originalLength = Number(fabric.length);
+    }
+  });
+  state.data.fabrics.forEach((fabric)=>recalculateFabricLength(fabric.id));
 }
 
 function renderPatterns() {
