@@ -78,8 +78,8 @@ function fabricCard(f) {
   const tpl = $('#fabricCardTpl').content.firstElementChild.cloneNode(true);
   tpl.querySelector('.thumb').src = f.image || IMG_EMPTY;
   tpl.querySelector('.title').textContent = f.name;
-  tpl.querySelector('.line1').textContent = `🏪 ${f.shop||'未知店铺'} ｜ 📏 ${fmt(f.length,'米')} ｜ 📐 ${fmt(f.width,'cm')}`;
-  tpl.querySelector('.line2').textContent = `💰 ${fmtPrice(f.price)} ｜ 成衣 ${state.data.garments.filter((g)=>g.fabricId===f.id).length} 件`;
+  tpl.querySelector('.line1').innerHTML = `🏪 <strong>店铺</strong> ${esc(f.shop||'未知店铺')} ｜ 📏 <strong>长度</strong> ${fmt(f.length,'米')} ｜ 📐 <strong>幅宽</strong> ${fmt(f.width,'cm')}`;
+  tpl.querySelector('.line2').innerHTML = `💰 <strong>价格</strong> ${fmtPrice(f.price)} ｜ 👗 <strong>成衣</strong> ${state.data.garments.filter((g)=>g.fabricId===f.id).length} 件`;
   const actions = tpl.querySelector('.actions');
   actions.innerHTML = `<button class='ghost'>详情/编辑</button><button>👗 添加成衣</button><button class='ghost'>删除</button>`;
   actions.children[0].onclick = () => showFabricForm(f);
@@ -127,7 +127,7 @@ function renderGarments() {
     const tr=document.createElement('tr');
     tr.innerHTML=`<td><img src='${g.image||IMG_EMPTY}' alt='成衣图' style='width:72px;height:72px;object-fit:cover;border-radius:8px;background:#eef0f4'/></td><td>${esc(g.name||'未命名')}</td><td>${esc(g.madeDate||'-')}</td><td>${fmt(g.usedLength,'米')}</td><td>${esc(fabricName(g.fabricId)||'-')}</td><td>${esc(patternName(g.patternId)||'-')}</td><td><button class='ghost'>编辑</button> <button class='ghost'>删除</button></td>`;
     tr.children[6].children[0].onclick=()=>showGarmentForm(g);
-    tr.children[6].children[1].onclick=()=>{if(confirm('确认删除成衣？')){state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
+    tr.children[6].children[1].onclick=()=>{if(confirm('确认删除成衣？')){restoreUsedLengthToFabric(g);state.data.garments=state.data.garments.filter(x=>x.id!==g.id);save();renderGarments();}};
     tb.appendChild(tr);
   });
 }
@@ -149,7 +149,23 @@ function showGarmentForm(g, defaultFabricId='') {
   <textarea name='notes' placeholder='备注'>${esc(g?.notes||'')}</textarea>
   <div class='row'><button type='submit'>💾 保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form></section>`);
   $('#closeG').onclick=()=>$('#garmentEditor').remove();
-  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);if(used&&fabric?.length&&used>fabric.length){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};upsert(state.data.garments,rec);save();route('garments');};
+  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);if(g) restoreUsedLengthToFabric(g);if(used&&fabric?.length!=null&&used>fabric.length){if(g) applyUsedLengthToFabric(g);alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):g?.image||'';const rec={id:g?.id||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:g?.createdAt||new Date().toISOString()};applyUsedLengthToFabric(rec);upsert(state.data.garments,rec);save();route('garments');};
+}
+
+function applyUsedLengthToFabric(garment){
+  const used = Number(garment?.usedLength);
+  if (!(used > 0)) return;
+  const fabric = state.data.fabrics.find((f)=>f.id===garment.fabricId);
+  if (!fabric || fabric.length == null) return;
+  fabric.length = +Math.max(0, (Number(fabric.length) - used)).toFixed(2);
+}
+
+function restoreUsedLengthToFabric(garment){
+  const used = Number(garment?.usedLength);
+  if (!(used > 0)) return;
+  const fabric = state.data.fabrics.find((f)=>f.id===garment.fabricId);
+  if (!fabric || fabric.length == null) return;
+  fabric.length = +(Number(fabric.length) + used).toFixed(2);
 }
 
 function renderPatterns() {
