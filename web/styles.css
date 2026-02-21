@@ -1,0 +1,132 @@
+:root {
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #222;
+  background: #f6f8fb;
+}
+
+body {
+  margin: 0;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  padding: 20px;
+  text-align: center;
+}
+
+.container {
+  width: min(1100px, 94vw);
+  margin: 18px auto 36px;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+input,
+textarea,
+button,
+.import-btn {
+  font: inherit;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input:not([type]),
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+button,
+.import-btn {
+  border: none;
+  border-radius: 999px;
+  background: #5b76ff;
+  color: #fff;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.import-btn input {
+  display: none;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.fabric-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fabric-item {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+}
+
+.fabric-image {
+  width: 120px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #f0f0f0;
+}
+
+.tags {
+  margin: 6px 0;
+  color: #666;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.stat {
+  background: #f4f6ff;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .fabric-item {
+    grid-template-columns: 1fr;
+  }
+
+  .fabric-image {
+    width: 100%;
+    height: 180px;
+  }
+}
