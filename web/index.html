@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小天裁 缝纫管家（JavaScript 版）</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <h1>🧵 小天裁 缝纫管家（JavaScript 版）</h1>
+      <p>纯前端版本，数据保存在浏览器 LocalStorage。</p>
+    </header>
+
+    <main class="container">
+      <section class="card stats" id="stats"></section>
+
+      <section class="card controls">
+        <input id="searchInput" type="text" placeholder="🔍 搜索布料名称/店铺" />
+        <button id="showAddFabricBtn">➕ 添加布料</button>
+        <button id="exportBtn">⬇️ 导出 JSON</button>
+        <label class="import-btn">
+          ⬆️ 导入 JSON
+          <input id="importInput" type="file" accept="application/json" />
+        </label>
+      </section>
+
+      <section class="card" id="addFabricPanel" hidden>
+        <h2>新增布料</h2>
+        <form id="fabricForm">
+          <div class="grid-2">
+            <label>
+              布料名称 *
+              <input name="name" required />
+            </label>
+            <label>
+              店铺
+              <input name="shop" />
+            </label>
+            <label>
+              长度（米）
+              <input name="length" type="number" min="0" step="0.1" />
+            </label>
+            <label>
+              幅宽（cm）
+              <input name="width" type="number" min="0" step="1" />
+            </label>
+            <label>
+              价格（元）
+              <input name="price" type="number" min="0" step="0.01" />
+            </label>
+            <label>
+              图片
+              <input name="image" type="file" accept="image/*" />
+            </label>
+          </div>
+          <div class="actions">
+            <button type="submit">💾 保存</button>
+            <button type="button" id="cancelAddFabric">取消</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>布料列表</h2>
+        <div id="fabricList" class="fabric-list"></div>
+      </section>
+
+      <section class="card" id="garmentPanel" hidden>
+        <h2>添加成衣记录</h2>
+        <form id="garmentForm">
+          <input type="hidden" name="fabricId" />
+          <div class="grid-2">
+            <label>
+              成衣名称
+              <input name="name" />
+            </label>
+            <label>
+              制作日期
+              <input name="madeDate" type="date" />
+            </label>
+            <label>
+              使用布长（米）
+              <input name="usedLength" type="number" min="0" step="0.1" />
+            </label>
+            <label>
+              成衣图片
+              <input name="image" type="file" accept="image/*" />
+            </label>
+          </div>
+          <label>
+            备注
+            <textarea name="notes" rows="3"></textarea>
+          </label>
+          <div class="actions">
+            <button type="submit">💾 保存成衣</button>
+            <button type="button" id="cancelGarment">取消</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <template id="fabricItemTpl">
+      <article class="fabric-item">
+        <img class="fabric-image" alt="布料图片" />
+        <div>
+          <h3 class="name"></h3>
+          <p class="meta"></p>
+          <p class="meta2"></p>
+          <div class="tags"></div>
+          <details>
+            <summary>成衣记录</summary>
+            <div class="garments"></div>
+          </details>
+          <div class="actions">
+            <button data-action="add-garment">👗 添加成衣</button>
+            <button data-action="delete">🗑️ 删除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
