@@ -26,8 +26,40 @@ function init() {
   load();
   ensureOriginalLengthAndRecalculate();
   renderNav();
+  setupSidebarToggles();
   setupUsageToggle();
   route(state.page);
+}
+
+
+function setupSidebarToggles() {
+  const sidebar = document.querySelector('.sidebar');
+  const menuToggle = $('#menuToggle');
+  const sidebarToggle = $('#sidebarToggle');
+  if (!sidebar || !menuToggle || !sidebarToggle) return;
+
+  const syncLabels = () => {
+    const menuCollapsed = sidebar.classList.contains('nav-collapsed') || sidebar.classList.contains('all-collapsed');
+    const allCollapsed = sidebar.classList.contains('all-collapsed');
+    menuToggle.textContent = menuCollapsed ? '菜单展开' : '菜单收起';
+    menuToggle.setAttribute('aria-expanded', String(!menuCollapsed));
+    sidebarToggle.textContent = allCollapsed ? '全部展开' : '全部收起';
+    sidebarToggle.setAttribute('aria-expanded', String(!allCollapsed));
+  };
+
+  menuToggle.onclick = () => {
+    sidebar.classList.remove('all-collapsed');
+    sidebar.classList.toggle('nav-collapsed');
+    syncLabels();
+  };
+
+  sidebarToggle.onclick = () => {
+    sidebar.classList.toggle('all-collapsed');
+    if (sidebar.classList.contains('all-collapsed')) sidebar.classList.add('nav-collapsed');
+    syncLabels();
+  };
+
+  syncLabels();
 }
 
 function setupUsageToggle() {
