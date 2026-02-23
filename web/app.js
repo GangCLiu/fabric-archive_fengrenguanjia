@@ -6,7 +6,7 @@ const pages = [
   ['garments', '成衣'],
   ['patterns', '纸样'],
   ['sizes', '尺码'],
-  ['backup', '数据备份'],
+  ['backup', '备份'],
 ];
 
 const state = {
@@ -26,41 +26,26 @@ function init() {
   load();
   ensureOriginalLengthAndRecalculate();
   renderNav();
-  setupSidebarToggles();
-  setupUsageToggle();
+  setupUsageModal();
   setupImageZoom();
   route(state.page);
 }
 
 
-function setupSidebarToggles() {
-  const sidebar = document.querySelector('.sidebar');
-  const menuToggle = $('#menuToggle');
-  if (!sidebar || !menuToggle) return;
+function setupUsageModal() {
+  const trigger = $('#usageHelpTrigger');
+  const modal = $('#usageModal');
+  const confirmBtn = $('#usageModalConfirm');
+  if (!trigger || !modal || !confirmBtn) return;
 
-  const syncLabel = () => {
-    const menuCollapsed = sidebar.classList.contains('nav-collapsed');
-    menuToggle.textContent = menuCollapsed ? '∨' : '^';
-    menuToggle.setAttribute('aria-expanded', String(!menuCollapsed));
-  };
+  const closeModal = () => modal.classList.add('hidden');
 
-  menuToggle.onclick = () => {
-    sidebar.classList.toggle('nav-collapsed');
-    syncLabel();
-  };
+  trigger.onclick = () => modal.classList.remove('hidden');
+  confirmBtn.onclick = closeModal;
 
-  syncLabel();
-}
-
-function setupUsageToggle() {
-  const usage = document.querySelector('.usage');
-  const toggle = $('#usageToggle');
-  if (!usage || !toggle) return;
-  toggle.onclick = () => {
-    const collapsed = usage.classList.toggle('collapsed');
-    toggle.textContent = collapsed ? '∨' : '^';
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-  };
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
 }
 
 function setupImagePreview(inputSelector, previewSelector, tipSelector) {
@@ -94,7 +79,7 @@ function setupImageZoom() {
 }
 
 function renderNav() {
-  const nav = $('#navMenu');
+  const nav = $('#bottomNav');
   nav.innerHTML = '';
   pages.forEach(([id, label]) => {
     const btn = document.createElement('button');
@@ -102,13 +87,6 @@ function renderNav() {
     btn.className = state.page === id ? 'active' : '';
     btn.onclick = () => {
       route(id);
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.add('nav-collapsed');
-      const menuToggle = $('#menuToggle');
-      if (menuToggle) {
-        menuToggle.textContent = '∨';
-        menuToggle.setAttribute('aria-expanded', 'false');
-      }
     };
     nav.appendChild(btn);
   });
