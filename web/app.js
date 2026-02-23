@@ -11,7 +11,7 @@ const pages = [
 
 const state = {
   page: 'home',
-  view: { home: 'grid', garments: 'table', patterns: 'grid', sizes: 'table', backup: 'stack' },
+  view: { home: 'grid', garments: 'table', patterns: 'grid', sizes: 'table' },
   search: { home: '', garments: '', patterns: '', sizes: '' },
   shopFilter: '全部',
   data: { fabrics: [], garments: [], patterns: [], sizes: [] },
@@ -326,8 +326,7 @@ function showSizeForm(s){
 }
 
 function renderBackup(){
-  app.innerHTML=`<section class='panel toolbar'><span>数据备份视图</span><select id='viewB'><option value='stack' ${state.view.backup==='stack'?'selected':''}>标准</option><option value='split' ${state.view.backup==='split'?'selected':''}>并排</option></select></section><section class='panel'><div class='backup-layout ${state.view.backup==='split'?'backup-split':'backup-stack'}'><article class='backup-card'><h3>导出数据</h3><button id='exp'>导出为 JSON</button></article><article class='backup-card'><h3>导入数据</h3><input type='file' id='imp' accept='application/json'/><p id='sum'></p></article></div></section>`;
-  $('#viewB').onchange=(e)=>{state.view.backup=e.target.value;renderBackup();};
+  app.innerHTML=`<section class='panel'><div class='backup-layout'><article class='backup-card'><h3>导出数据</h3><button id='exp'>导出为 JSON</button></article><article class='backup-card'><h3>导入数据</h3><input type='file' id='imp' accept='application/json'/><p id='sum'></p></article></div></section>`;
   $('#exp').onclick=()=>{const blob=new Blob([JSON.stringify({export_time:new Date().toISOString(),...state.data},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`fabric_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);};
   $('#imp').onchange=(e)=>{const f=e.target.files?.[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(String(r.result||'{}'));['fabrics','garments','patterns','sizes'].forEach((k)=>{if(!Array.isArray(d[k]))throw new Error('bad');});state.data={fabrics:d.fabrics,garments:d.garments,patterns:d.patterns,sizes:d.sizes};save();$('#sum').textContent=`导入成功：布料${d.fabrics.length}，成衣${d.garments.length}，纸样${d.patterns.length}，尺码${d.sizes.length}`;}catch{alert('导入失败：格式错误')}};r.readAsText(f);};
 }
@@ -359,7 +358,7 @@ function showToast(msg) {
   }, 1200);
 }
 
-function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!d?.data)return;Object.assign(state,d);state.view={home:'grid',garments:'table',patterns:'grid',sizes:'table',backup:'stack',...(d.view||{})};state.search={home:'',garments:'',patterns:'',sizes:'',...(d.search||{})};}catch{}}
+function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!d?.data)return;Object.assign(state,d);state.view={home:'grid',garments:'table',patterns:'grid',sizes:'table',...(d.view||{})};state.search={home:'',garments:'',patterns:'',sizes:'',...(d.search||{})};}catch{}}
 function save(){localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));}
 
 function upsert(arr,item){const i=arr.findIndex((x)=>x.id===item.id);if(i>=0)arr[i]=item;else arr.unshift(item);}
