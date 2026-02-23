@@ -6,7 +6,7 @@ const pages = [
   ['garments', '成衣'],
   ['patterns', '纸样'],
   ['sizes', '尺码'],
-  ['backup', '数据备份'],
+  ['backup', '备份'],
 ];
 
 const state = {
@@ -94,7 +94,7 @@ function setupImageZoom() {
 }
 
 function renderNav() {
-  const nav = $('#navMenu');
+  const nav = $('#bottomNav');
   nav.innerHTML = '';
   pages.forEach(([id, label]) => {
     const btn = document.createElement('button');
@@ -102,13 +102,6 @@ function renderNav() {
     btn.className = state.page === id ? 'active' : '';
     btn.onclick = () => {
       route(id);
-      const sidebar = document.querySelector('.sidebar');
-      if (sidebar) sidebar.classList.add('nav-collapsed');
-      const menuToggle = $('#menuToggle');
-      if (menuToggle) {
-        menuToggle.textContent = '∨';
-        menuToggle.setAttribute('aria-expanded', 'false');
-      }
     };
     nav.appendChild(btn);
   });
