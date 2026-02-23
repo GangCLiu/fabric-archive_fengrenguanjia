@@ -130,8 +130,8 @@ function fabricCard(f) {
   const tpl = $('#fabricCardTpl').content.firstElementChild.cloneNode(true);
   tpl.querySelector('.thumb').src = f.image || IMG_EMPTY;
   tpl.querySelector('.title').textContent = f.name;
-  tpl.querySelector('.line1').innerHTML = `<strong>店铺</strong> ${esc(f.shop||'未知店铺')} ｜ <strong>长度</strong> ${fmt(f.length,'米')} ｜ <strong>幅宽</strong> ${fmt(f.width,'cm')}`;
-  tpl.querySelector('.line2').innerHTML = `<strong>价格</strong> ${fmtPrice(f.price)} ｜ <strong>成衣</strong> ${state.data.garments.filter((g)=>g.fabricId===f.id).length} 件`;
+  tpl.querySelector('.line1').innerHTML = `<span class='meta-item'><span class='meta-k'>店铺</span><span class='meta-v'>${esc(f.shop||'未知店铺')}</span></span><span class='meta-item'><span class='meta-k'>长度</span><span class='meta-v'>${fmt(f.length,'米')}</span></span><span class='meta-item'><span class='meta-k'>幅宽</span><span class='meta-v'>${fmt(f.width,'cm')}</span></span>`;
+  tpl.querySelector('.line2').innerHTML = `<span class='meta-item'><span class='meta-k'>价格</span><span class='meta-v'>${fmtPrice(f.price)}</span></span><span class='meta-item'><span class='meta-k'>成衣</span><span class='meta-v'>${state.data.garments.filter((g)=>g.fabricId===f.id).length} 件</span></span>`;
   const actions = tpl.querySelector('.actions');
   actions.innerHTML = `<button class='ghost'>详情/编辑</button><button>添加成衣</button><button class='ghost'>删除</button>`;
   actions.children[0].onclick = () => showFabricForm(f);
@@ -209,7 +209,7 @@ function renderGarments() {
   rows.forEach((g)=>{
     const card=document.createElement('article');
     card.className='card-item';
-    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'>${esc(g.madeDate||'-')} ｜ ${fmt(g.usedLength,'米')}</p><p class='line2'>布料 ${esc(fabricName(g.fabricId)||'-')} ｜ 纸样 ${esc(patternName(g.patternId)||'-')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
+    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>日期</span><span class='meta-v'>${esc(g.madeDate||'-')}</span></span><span class='meta-item'><span class='meta-k'>用布</span><span class='meta-v'>${fmt(g.usedLength,'米')}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>布料</span><span class='meta-v'>${esc(fabricName(g.fabricId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>纸样</span><span class='meta-v'>${esc(patternName(g.patternId)||'-')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
     card.querySelectorAll('button')[0].onclick=()=>showGarmentForm(g);
     card.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除成衣？')){const oldFabricId=g.fabricId;state.data.garments=state.data.garments.filter(x=>x.id!==g.id);recalculateFabricLength(oldFabricId);save();renderGarments();}};
     list.appendChild(card);
@@ -303,7 +303,7 @@ function renderSizes(){
   rows.forEach((s)=>{
     const card=document.createElement('article');
     card.className='card-item';
-    card.innerHTML=`<h4 class='title'>${esc(s.name)}</h4><p class='line1'>身高/体重：${fmt(s.height_cm,'cm')} / ${fmt(s.weight_kg,'kg')}</p><p class='line2'>胸${fmt(s.bust_cm,'')} 腰${fmt(s.waist_cm,'')} 臀${fmt(s.hip_cm,'')} ｜ 臂${fmt(s.arm_length_cm,'')} 衣${fmt(s.garment_length_cm,'')} 腿${fmt(s.leg_length_cm,'')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
+    card.innerHTML=`<h4 class='title'>${esc(s.name)}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>身高</span><span class='meta-v'>${fmt(s.height_cm,'cm')}</span></span><span class='meta-item'><span class='meta-k'>体重</span><span class='meta-v'>${fmt(s.weight_kg,'kg')}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>三围</span><span class='meta-v'>胸${fmt(s.bust_cm,'')} 腰${fmt(s.waist_cm,'')} 臀${fmt(s.hip_cm,'')}</span></span><span class='meta-item'><span class='meta-k'>长度</span><span class='meta-v'>臂${fmt(s.arm_length_cm,'')} 衣${fmt(s.garment_length_cm,'')} 腿${fmt(s.leg_length_cm,'')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
     card.querySelectorAll('button')[0].onclick=()=>showSizeForm(s);
     card.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除尺码档案？')){state.data.sizes=state.data.sizes.filter(x=>x.id!==s.id);save();renderSizes();}};
     list.appendChild(card);
