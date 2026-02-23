@@ -70,6 +70,7 @@ button.ghost{background:#eef1f8;color:#394150;border:1px solid #d6d9e3}
 .backup-layout{display:grid;gap:var(--space-3)}
 .backup-split{grid-template-columns:repeat(2,minmax(0,1fr))}
 .backup-stack{grid-template-columns:1fr}
+.backup-card{background:var(--surface-soft);border:1px solid var(--line);border-radius:12px;padding:14px}
 
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field span{font-size:var(--fs-sm);color:#465066;font-weight:600}.hidden{display:none}
 
