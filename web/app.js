@@ -26,41 +26,26 @@ function init() {
   load();
   ensureOriginalLengthAndRecalculate();
   renderNav();
-  setupSidebarToggles();
-  setupUsageToggle();
+  setupUsageModal();
   setupImageZoom();
   route(state.page);
 }
 
 
-function setupSidebarToggles() {
-  const sidebar = document.querySelector('.sidebar');
-  const menuToggle = $('#menuToggle');
-  if (!sidebar || !menuToggle) return;
+function setupUsageModal() {
+  const trigger = $('#usageHelpTrigger');
+  const modal = $('#usageModal');
+  const confirmBtn = $('#usageModalConfirm');
+  if (!trigger || !modal || !confirmBtn) return;
 
-  const syncLabel = () => {
-    const menuCollapsed = sidebar.classList.contains('nav-collapsed');
-    menuToggle.textContent = menuCollapsed ? '∨' : '^';
-    menuToggle.setAttribute('aria-expanded', String(!menuCollapsed));
-  };
+  const closeModal = () => modal.classList.add('hidden');
 
-  menuToggle.onclick = () => {
-    sidebar.classList.toggle('nav-collapsed');
-    syncLabel();
-  };
+  trigger.onclick = () => modal.classList.remove('hidden');
+  confirmBtn.onclick = closeModal;
 
-  syncLabel();
-}
-
-function setupUsageToggle() {
-  const usage = document.querySelector('.usage');
-  const toggle = $('#usageToggle');
-  if (!usage || !toggle) return;
-  toggle.onclick = () => {
-    const collapsed = usage.classList.toggle('collapsed');
-    toggle.textContent = collapsed ? '∨' : '^';
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-  };
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
 }
 
 function setupImagePreview(inputSelector, previewSelector, tipSelector) {

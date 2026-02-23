@@ -11,22 +11,11 @@
       <aside class="sidebar">
         <div class="sidebar-header">
           <h1 class="logo">小天裁缝纫管家</h1>
-          <div class="sidebar-controls">
-            <button id="menuToggle" class="ghost sidebar-toggle" type="button" aria-label="切换菜单" title="切换菜单" aria-expanded="true">^</button>
-          </div>
+          <button id="usageHelpTrigger" class="usage-help-trigger" type="button" aria-label="打开使用说明" title="打开使用说明">
+            <span class="help-icon">?</span>
+            <span>使用说明</span>
+          </button>
         </div>
-        <section class="usage" aria-label="使用说明">
-          <div class="usage-header">
-            <h3>使用说明</h3>
-            <button id="usageToggle" class="ghost usage-toggle" type="button" aria-label="切换使用说明" title="切换使用说明" aria-expanded="true">^</button>
-          </div>
-          <ol id="usageList">
-            <li>在布料列表点击“去添加布料”</li>
-            <li>支持网格/列表视图</li>
-            <li>可管理成衣、纸样、尺码档案</li>
-            <li>定期在“数据备份”导出 JSON</li>
-          </ol>
-        </section>
       </aside>
 
       <main class="content">
@@ -48,6 +37,21 @@
         <div class="row actions"></div>
       </article>
     </template>
+
+    <div id="usageModal" class="usage-modal hidden" role="dialog" aria-modal="true" aria-labelledby="usageModalTitle">
+      <div class="usage-modal-card">
+        <h3 id="usageModalTitle">使用说明</h3>
+        <ol>
+          <li>在布料列表点击“去添加布料”</li>
+          <li>支持网格/列表视图</li>
+          <li>可管理成衣、纸样、尺码档案</li>
+          <li>定期在“数据备份”导出 JSON</li>
+        </ol>
+        <div class="usage-modal-actions">
+          <button id="usageModalConfirm" type="button">确定</button>
+        </div>
+      </div>
+    </div>
 
     <script src="./app.js"></script>
   </body>
