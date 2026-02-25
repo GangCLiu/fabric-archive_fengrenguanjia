@@ -63,9 +63,19 @@ function setupImagePreview(inputSelector, previewSelector, tipSelector) {
   });
 }
 
+
+function closestEl(start, selector){
+  let el = start;
+  while (el && el !== document) {
+    if (typeof el.matches === 'function' && el.matches(selector)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 function setupImageZoom() {
   document.addEventListener('click', (e) => {
-    const img = e.target.closest('[data-preview-image]');
+    const img = closestEl(e.target, '[data-preview-image]');
     if (img) {
       const modal = document.createElement('div');
       modal.className = 'image-modal';
@@ -74,7 +84,7 @@ function setupImageZoom() {
       document.body.appendChild(modal);
       return;
     }
-    if (e.target.closest('.image-modal')) e.target.closest('.image-modal').remove();
+    const modalEl = closestEl(e.target, '.image-modal');if (modalEl) modalEl.remove();
   });
 }
 
@@ -101,7 +111,7 @@ function route(id) {
 
 function renderHome() {
   const fabrics = filteredFabrics();
-  const shops = ['全部', ...new Set(state.data.fabrics.map((f) => f.shop).filter(Boolean))];
+  const shops = ['全部'].concat(Array.from(new Set(state.data.fabrics.map((f) => f.shop).filter(Boolean))));
   if (!shops.includes(state.shopFilter)) state.shopFilter = '全部';
 
   app.innerHTML = `
@@ -327,7 +337,7 @@ function showSizeForm(s){
 
 function renderBackup(){
   app.innerHTML=`<section class='panel'><div class='backup-layout'><article class='backup-card'><h3>导出数据</h3><button id='exp'>导出为 JSON</button></article><article class='backup-card'><h3>导入数据</h3><input type='file' id='imp' accept='application/json'/><p id='sum'></p></article></div></section>`;
-  $('#exp').onclick=()=>{const blob=new Blob([JSON.stringify({export_time:new Date().toISOString(),...state.data},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`fabric_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);};
+  $('#exp').onclick=()=>{const blob=new Blob([JSON.stringify({export_time:new Date().toISOString(),fabrics:state.data.fabrics,garments:state.data.garments,patterns:state.data.patterns,sizes:state.data.sizes},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`fabric_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);};
   $('#imp').onchange=(e)=>{const f=(e.target.files && e.target.files[0]);if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(String(r.result||'{}'));['fabrics','garments','patterns','sizes'].forEach((k)=>{if(!Array.isArray(d[k]))throw new Error('bad');});state.data={fabrics:d.fabrics,garments:d.garments,patterns:d.patterns,sizes:d.sizes};save();$('#sum').textContent=`导入成功：布料${d.fabrics.length}，成衣${d.garments.length}，纸样${d.patterns.length}，尺码${d.sizes.length}`;}catch(err){alert('导入失败：格式错误')}};r.readAsText(f);};
 }
 
@@ -358,8 +368,8 @@ function showToast(msg) {
   }, 1200);
 }
 
-function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!(d&&d.data))return;Object.assign(state,d);state.view={home:'grid',garments:'table',patterns:'grid',sizes:'table',...(d.view||{})};state.search={home:'',garments:'',patterns:'',sizes:'',...(d.search||{})};}catch(err){}}
-function save(){localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));}
+function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!(d&&d.data))return;Object.assign(state,d);state.view=Object.assign({home:'grid',garments:'table',patterns:'grid',sizes:'table'},d.view||{});state.search=Object.assign({home:'',garments:'',patterns:'',sizes:''},d.search||{});}catch(err){}}
+function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));}catch(err){alert('保存失败：设备存储空间不足或浏览器限制了本地存储');}}
 
 function upsert(arr,item){const i=arr.findIndex((x)=>x.id===item.id);if(i>=0)arr[i]=item;else arr.unshift(item);}
 function id(){
