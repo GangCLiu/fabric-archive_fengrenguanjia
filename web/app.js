@@ -17,6 +17,8 @@ const state = {
   data: { fabrics: [], garments: [], patterns: [], sizes: [] },
 };
 
+let saveErrorNotified = false;
+
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
 
@@ -36,16 +38,48 @@ function setupUsageModal() {
   const trigger = $('#usageHelpTrigger');
   const modal = $('#usageModal');
   const confirmBtn = $('#usageModalConfirm');
-  if (!trigger || !modal || !confirmBtn) return;
+  if (!trigger) return;
 
-  const closeModal = () => modal.classList.add('hidden');
+  const fallbackText = [
+    '使用说明：',
+    '1. 在布料列表点击“去添加布料”',
+    '2. 支持网格/列表视图',
+    '3. 可管理成衣、纸样、尺码档案',
+    '4. 定期在“数据备份”导出 JSON',
+  ].join('\n');
 
-  trigger.onclick = () => modal.classList.remove('hidden');
-  confirmBtn.onclick = closeModal;
+  const openModal = () => {
+    if (!modal) {
+      alert(fallbackText);
+      return;
+    }
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+  };
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
+  const closeModal = () => {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+  };
+
+  if (modal && modal.classList.contains('hidden')) {
+    modal.style.display = 'none';
+  }
+
+  trigger.onclick = openModal;
+  trigger.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    openModal();
   });
+
+  if (confirmBtn) confirmBtn.onclick = closeModal;
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+  }
 }
 
 function setupImagePreview(inputSelector, previewSelector, tipSelector) {
@@ -369,7 +403,23 @@ function showToast(msg) {
 }
 
 function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!(d&&d.data))return;Object.assign(state,d);state.view=Object.assign({home:'grid',garments:'table',patterns:'grid',sizes:'table'},d.view||{});state.search=Object.assign({home:'',garments:'',patterns:'',sizes:''},d.search||{});}catch(err){}}
-function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));}catch(err){alert('保存失败：设备存储空间不足或浏览器限制了本地存储');}}
+function save(){
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));
+    saveErrorNotified = false;
+  }catch(err){
+    const name = err && err.name ? String(err.name) : '';
+    const quotaLike = name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+    if (quotaLike) {
+      if (!saveErrorNotified) {
+        alert('保存失败：本地存储空间不足，请先到“备份”导出并清理浏览器数据后重试。');
+        saveErrorNotified = true;
+      }
+      return;
+    }
+    console.warn('localStorage save failed:', err);
+  }
+}
 
 function upsert(arr,item){const i=arr.findIndex((x)=>x.id===item.id);if(i>=0)arr[i]=item;else arr.unshift(item);}
 function id(){
