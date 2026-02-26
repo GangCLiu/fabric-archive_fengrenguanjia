@@ -217,7 +217,7 @@ function showFabricForm(f) {
     }
     upsert(state.data.fabrics, payload);
     recalculateFabricLength(payload.id);
-    save();
+    if (!save()) return;
     showToast('保存成功!');
     panel.innerHTML = '';
     renderHome();
@@ -279,7 +279,7 @@ function showGarmentForm(g, defaultFabricId='') {
   <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form>`;
   $('#closeG').onclick=()=>{panel.className='';panel.innerHTML='';};
   setupImagePreview('#garmentImageInput','#garmentImagePreview','#garmentImageTip');
-  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);save();showToast('保存成功!');route('garments');};
+  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);if(!save())return;showToast('保存成功!');route('garments');};
 }
 
 function usedLengthSumByFabric(fabricId, excludeGarmentId = null){
@@ -323,7 +323,7 @@ function showPatternForm(p){
   panel.innerHTML=`<h3>${p?'编辑':'新增'}纸样</h3><form id='pForm' class='form-grid'><label class='field'><span>纸样名称</span><input name='name' value='${esc((p&&p.name)||'')}' placeholder='纸样名称*' required/></label><label class='field'><span>纸样图片</span><input id='patternImageInput' name='image' type='file' accept='image/*'/></label><div class='image-preview-wrap'><img id='patternImagePreview' class='image-preview ${(p&&p.image) ? '' : 'hidden'}' src='${esc((p&&p.image)||'')}' alt='纸样图片预览' data-preview-image /><div id='patternImageTip' class='preview-tip ${(p&&p.image) ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div><label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc((p&&p.notes)||'')}</textarea></label><div class='row'><button>保存</button><button id='closeP' type='button' class='ghost'>取消</button></div></form>`;
   setupImagePreview('#patternImageInput','#patternImagePreview','#patternImageTip');
   $('#closeP').onclick=()=>{panel.className='';panel.innerHTML='';};
-  $('#pForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(p&&p.image)||'';upsert(state.data.patterns,{id:(p&&p.id)||id(),name:val(fd,'name'),notes:val(fd,'notes'),image,createdAt:(p&&p.createdAt)||new Date().toISOString()});save();showToast('保存成功!');route('patterns');};
+  $('#pForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(p&&p.image)||'';upsert(state.data.patterns,{id:(p&&p.id)||id(),name:val(fd,'name'),notes:val(fd,'notes'),image,createdAt:(p&&p.createdAt)||new Date().toISOString()});if(!save())return;showToast('保存成功!');route('patterns');};
 }
 
 function renderSizes(){
@@ -366,13 +366,13 @@ function showSizeForm(s){
 <label class='field'><span>腿长(cm)</span><input name='leg_length_cm' type='number' step='0.1' placeholder='腿长(cm)' value='${s && s.leg_length_cm != null ? s.leg_length_cm : ''}'/></label><label class='field'><span>描述</span><textarea name='description' placeholder='描述'>${esc((s&&s.description)||'')}</textarea></label>
 <div class='row'><button>保存</button><button id='closeS' type='button' class='ghost'>取消</button></div></form>`;
   $('#closeS').onclick=()=>{panel.className='';panel.innerHTML='';};
-  $('#sForm').onsubmit=(e)=>{e.preventDefault();const fd=new FormData(e.target);upsert(state.data.sizes,{id:(s&&s.id)||id(),name:val(fd,'name'),height_cm:num(fd,'height_cm'),weight_kg:num(fd,'weight_kg'),bust_cm:num(fd,'bust_cm'),waist_cm:num(fd,'waist_cm'),hip_cm:num(fd,'hip_cm'),arm_length_cm:num(fd,'arm_length_cm'),garment_length_cm:num(fd,'garment_length_cm'),leg_length_cm:num(fd,'leg_length_cm'),description:val(fd,'description'),createdAt:(s&&s.createdAt)||new Date().toISOString()});save();showToast('保存成功!');route('sizes');};
+  $('#sForm').onsubmit=(e)=>{e.preventDefault();const fd=new FormData(e.target);upsert(state.data.sizes,{id:(s&&s.id)||id(),name:val(fd,'name'),height_cm:num(fd,'height_cm'),weight_kg:num(fd,'weight_kg'),bust_cm:num(fd,'bust_cm'),waist_cm:num(fd,'waist_cm'),hip_cm:num(fd,'hip_cm'),arm_length_cm:num(fd,'arm_length_cm'),garment_length_cm:num(fd,'garment_length_cm'),leg_length_cm:num(fd,'leg_length_cm'),description:val(fd,'description'),createdAt:(s&&s.createdAt)||new Date().toISOString()});if(!save())return;showToast('保存成功!');route('sizes');};
 }
 
 function renderBackup(){
   app.innerHTML=`<section class='panel'><div class='backup-layout'><article class='backup-card'><h3>导出数据</h3><button id='exp'>导出为 JSON</button></article><article class='backup-card'><h3>导入数据</h3><input type='file' id='imp' accept='application/json'/><p id='sum'></p></article></div></section>`;
   $('#exp').onclick=()=>{const blob=new Blob([JSON.stringify({export_time:new Date().toISOString(),fabrics:state.data.fabrics,garments:state.data.garments,patterns:state.data.patterns,sizes:state.data.sizes},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`fabric_backup_${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);};
-  $('#imp').onchange=(e)=>{const f=(e.target.files && e.target.files[0]);if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(String(r.result||'{}'));['fabrics','garments','patterns','sizes'].forEach((k)=>{if(!Array.isArray(d[k]))throw new Error('bad');});state.data={fabrics:d.fabrics,garments:d.garments,patterns:d.patterns,sizes:d.sizes};save();$('#sum').textContent=`导入成功：布料${d.fabrics.length}，成衣${d.garments.length}，纸样${d.patterns.length}，尺码${d.sizes.length}`;}catch(err){alert('导入失败：格式错误')}};r.readAsText(f);};
+  $('#imp').onchange=(e)=>{const f=(e.target.files && e.target.files[0]);if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(String(r.result||'{}'));['fabrics','garments','patterns','sizes'].forEach((k)=>{if(!Array.isArray(d[k]))throw new Error('bad');});state.data={fabrics:d.fabrics,garments:d.garments,patterns:d.patterns,sizes:d.sizes};if(!save()){ $('#sum').textContent='导入失败：本地存储不可用或空间不足'; return; }$('#sum').textContent=`导入成功：布料${d.fabrics.length}，成衣${d.garments.length}，纸样${d.patterns.length}，尺码${d.sizes.length}`;}catch(err){alert('导入失败：格式错误')}};r.readAsText(f);};
 }
 
 function filteredFabrics(){
@@ -403,21 +403,54 @@ function showToast(msg) {
 }
 
 function load(){try{const raw=localStorage.getItem(STORE_KEY);if(!raw)return;const d=JSON.parse(raw);if(!(d&&d.data))return;Object.assign(state,d);state.view=Object.assign({home:'grid',garments:'table',patterns:'grid',sizes:'table'},d.view||{});state.search=Object.assign({home:'',garments:'',patterns:'',sizes:''},d.search||{});}catch(err){}}
+function detectStorageErrorType(err){
+  const name = err && err.name ? String(err.name) : '';
+  const code = err && typeof err.code === 'number' ? err.code : null;
+  const msg = err && err.message ? String(err.message).toLowerCase() : '';
+  const restrictedLike = name === 'SecurityError' || code === 18 || msg.includes('access is denied') || msg.includes('insecure');
+  if (restrictedLike) return 'restricted';
+
+  const quotaName = name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+  const quotaCode = code === 1014;
+  const quotaMessage = msg.includes('quota') || msg.includes('exceeded') || msg.includes('storage full');
+  if (quotaName || quotaCode || quotaMessage) return 'quota';
+
+  return 'unknown';
+}
+
+function canWriteTinyLocalStorage(){
+  try{
+    const key = '__sewing_storage_probe__';
+    localStorage.setItem(key, '1');
+    localStorage.removeItem(key);
+    return true;
+  }catch(err){
+    return false;
+  }
+}
+
 function save(){
   try{
     localStorage.setItem(STORE_KEY,JSON.stringify({page:state.page,view:state.view,search:state.search,shopFilter:state.shopFilter,data:state.data}));
     saveErrorNotified = false;
+    return true;
   }catch(err){
-    const name = err && err.name ? String(err.name) : '';
-    const quotaLike = name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
-    if (quotaLike) {
-      if (!saveErrorNotified) {
-        alert('保存失败：本地存储空间不足，请先到“备份”导出并清理浏览器数据后重试。');
-        saveErrorNotified = true;
+    let errorType = detectStorageErrorType(err);
+    if (errorType === 'quota' && !canWriteTinyLocalStorage()) {
+      errorType = 'restricted';
+    }
+    if (!saveErrorNotified) {
+      if (errorType === 'quota') {
+        alert('保存失败：本地存储空间不足。请在“备份”中先导出数据，然后删除部分图片或清理浏览器缓存后重试。');
+      } else if (errorType === 'restricted') {
+        alert('保存失败：当前设备限制了本地存储权限，请关闭隐私/无痕模式后重试。');
+      } else {
+        alert('保存失败：当前设备无法写入本地数据，请先导出备份并重试。');
       }
-      return;
+      saveErrorNotified = true;
     }
     console.warn('localStorage save failed:', err);
+    return false;
   }
 }
 
@@ -436,4 +469,33 @@ function fabricName(fid){const f = state.data.fabrics.find((x)=>x.id===fid);retu
 
 function patternName(pid){const p = state.data.patterns.find((x)=>x.id===pid);return p ? p.name : '';}
 function esc(s){return String(s||'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function toDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=rej;r.readAsDataURL(file);});}
+function toDataUrl(file){
+  if (!file || !(file.type||'').startsWith('image/')) {
+    return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=rej;r.readAsDataURL(file);});
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve(String(reader.result));
+      img.onload = () => {
+        const maxEdge = 1600;
+        const longest = Math.max(img.width, img.height);
+        const scale = longest > maxEdge ? maxEdge / longest : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(String(reader.result));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
