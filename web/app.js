@@ -2,6 +2,7 @@ const STORE_KEY = 'sewing_manager_full_v2';
 const IMG_EMPTY = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='200'><rect fill='%23edf0f4' width='100%' height='100%'/><text x='50%' y='50%' fill='%23909aae' dominant-baseline='middle' text-anchor='middle'>无图片</text></svg>";
 
 const pages = [
+  ['data', '数据'],
   ['home', '布料'],
   ['patterns', '纸样'],
   ['sizes', '尺码'],
@@ -140,7 +141,7 @@ function route(id) {
   state.page = id;
   $('#pageTitle').textContent = ((pages.find((p) => p[0] === id) || [])[1] || '');
   renderNav();
-  ({ home: renderHome, garments: renderGarments, patterns: renderPatterns, sizes: renderSizes, backup: renderBackup }[id])();
+  ({ data: renderDataCenter, home: renderHome, garments: renderGarments, patterns: renderPatterns, sizes: renderSizes, backup: renderBackup }[id])();
 }
 
 function renderHome() {
@@ -149,7 +150,6 @@ function renderHome() {
   if (!shops.includes(state.shopFilter)) state.shopFilter = '全部';
 
   app.innerHTML = `
-  <section class="panel stats">${statsHTML()}</section>
   <section class="panel toolbar">
     <input id="searchHome" placeholder="输入名称或店铺..." value="${esc(state.search.home)}" />
     <select id="shopFilter">${shops.map((s) => `<option ${s===state.shopFilter?'selected':''}>${s}</option>`).join('')}</select>
@@ -166,6 +166,64 @@ function renderHome() {
   box.innerHTML = `<p>找到 ${fabrics.length} 块布料</p><div class="grid" id="fabricList"></div>`;
   const list = $('#fabricList');
   fabrics.forEach((f) => list.appendChild(fabricCard(f)));
+}
+
+function renderDataCenter() {
+  const fabrics = state.data.fabrics;
+  const garments = state.data.garments;
+  const patterns = state.data.patterns;
+
+  const purchasedLength = fabrics.reduce((sum, item) => sum + (Number(item.originalLength) || Number(item.length) || 0), 0);
+  const purchaseCount = fabrics.length;
+  const purchasedCost = fabrics.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+  const usedLength = garments.reduce((sum, item) => sum + (Number(item.usedLength) || 0), 0);
+  const remainLength = fabrics.reduce((sum, item) => sum + (Number(item.length) || 0), 0);
+  const usageRate = purchasedLength > 0 ? `${((usedLength / purchasedLength) * 100).toFixed(1)}%` : '-';
+
+  const patternCount = patterns.length;
+  const patternCost = patterns.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+
+  const garmentCount = garments.length;
+  const garmentValue = garments.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+
+  app.innerHTML = `
+  <section class='panel'>
+    <h3>布料统计</h3>
+    <div class='stats'>
+      ${statItem('购买总米数', fmt(purchasedLength, '米'))}
+      ${statItem('购买次数', `${purchaseCount}次`)}
+      ${statItem('购买花费', fmtPrice(purchasedCost))}
+      ${statItem('耗布米数', fmt(usedLength, '米'))}
+      ${statItem('剩余米数', fmt(remainLength, '米'))}
+      ${statItem('利用率', usageRate)}
+    </div>
+  </section>
+  <section class='panel'>
+    <h3>纸样统计</h3>
+    <div class='stats'>
+      ${statItem('纸样数量', `${patternCount}个`)}
+      ${statItem('纸样花费', fmtPrice(patternCost))}
+    </div>
+  </section>
+  <section class='panel'>
+    <h3>成衣统计</h3>
+    <div class='stats'>
+      ${statItem('成衣数量', `${garmentCount}件`)}
+      ${statItem('成衣估值', fmtPrice(garmentValue))}
+    </div>
+  </section>
+  <section class='panel'>
+    <h3>其余分组</h3>
+    <div class='stats'>
+      ${statItem('关联店铺数', `${new Set(fabrics.map((item) => item.shop).filter(Boolean)).size}家`)}
+      ${statItem('关联尺码档', `${state.data.sizes.length}个`)}
+      ${statItem('已关联纸样的成衣', `${garments.filter((item) => item.patternId).length}件`)}
+    </div>
+  </section>`;
+}
+
+function statItem(k, v) {
+  return `<div class='stat'><div class='k'>${k}</div><div class='v'>${v}</div></div>`;
 }
 
 function fabricCard(f) {
@@ -359,12 +417,6 @@ function filteredFabrics(){
     return matchQ && matchShop;
   });
 }
-
-function statsHTML(){
-  const list=state.data.fabrics;const totalValue=list.reduce((s,i)=>s+(i.price||0),0);const totalLength=list.reduce((s,i)=>s+(i.length||0),0);const shops=new Set(list.map((i)=>i.shop).filter(Boolean)).size;
-  return [["布料总数",`${list.length}块`],["总价值",`¥${totalValue.toFixed(0)}`],["总长度",`${totalLength.toFixed(1)}米`],["店铺数量",`${shops}家`]].map(([k,v])=>`<div class='stat'><div class='k'>${k}</div><div class='v'>${v}</div></div>`).join('');
-}
-
 
 function showToast(msg) {
   const toast = document.createElement('div');
