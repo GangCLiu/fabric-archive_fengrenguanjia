@@ -48,8 +48,9 @@
 .usage-modal-actions{display:flex;justify-content:flex-end;margin-top:14px}
 .usage-modal-actions button{min-width:88px}
 
-.bottom-nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;justify-content:center;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:rgba(214,220,235,.97);border-top:1px solid #c6cedf;box-shadow:0 -6px 16px rgba(32,44,72,.12);z-index:1000;backdrop-filter:blur(8px)}
-.bottom-nav button{border:1px solid #c0c8d9;background:linear-gradient(180deg,#eef2fa 0%,#dfe6f2 100%);color:#3a4354;border-radius:14px 14px 10px 10px;padding:10px 20px 8px;font-size:clamp(.95rem,1.3vw,1.15rem);font-weight:600;text-align:center;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 2px 4px rgba(50,64,99,.12);transition:all .18s ease}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-start;padding:8px 12px calc(8px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;white-space:nowrap;-webkit-overflow-scrolling:touch;background:rgba(214,220,235,.97);border-top:1px solid #c6cedf;box-shadow:0 -6px 16px rgba(32,44,72,.12);z-index:1000;backdrop-filter:blur(8px);scrollbar-width:none}
+.bottom-nav::-webkit-scrollbar{display:none}
+.bottom-nav button{flex:0 0 auto;min-width:84px;border:1px solid #c0c8d9;background:linear-gradient(180deg,#eef2fa 0%,#dfe6f2 100%);color:#3a4354;border-radius:14px 14px 10px 10px;padding:10px 20px 8px;font-size:clamp(.95rem,1.3vw,1.15rem);font-weight:600;text-align:center;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 2px 4px rgba(50,64,99,.12);transition:all .18s ease}
 .bottom-nav button:hover{transform:translateY(-2px);background:linear-gradient(180deg,#f7f9fe 0%,#e5ebf7 100%)}
 .bottom-nav button.active{background:linear-gradient(180deg,#ffffff 0%,#f2f5fd 100%);border-color:#9eaad0;color:var(--primary);font-weight:700;box-shadow:0 6px 14px rgba(79,70,229,.16),inset 0 1px 0 rgba(255,255,255,.95)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-4);margin-bottom:var(--space-3);box-shadow:var(--shadow-sm)}#editPanel{min-height:0}
@@ -183,8 +184,8 @@ button.ghost{
   .content{padding:1rem;padding-bottom:108px}
   .panel{padding:.9rem}
   .title{font-size:22px}
-  .bottom-nav{left:0;right:0;justify-content:space-between;gap:4px;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
-  .bottom-nav button{flex:1;min-width:0;padding:10px 8px;font-size:.92rem}
+  .bottom-nav{left:0;right:0;justify-content:flex-start;gap:4px;padding:6px 10px calc(6px + env(safe-area-inset-bottom))}
+  .bottom-nav button{flex:0 0 auto;min-width:84px;padding:10px 12px;font-size:.92rem}
 }
 
 
