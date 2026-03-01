@@ -314,7 +314,7 @@ function renderGarments() {
   rows.forEach((g)=>{
     const card=document.createElement('article');
     card.className='card-item';
-    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>日期</span><span class='meta-v'>${esc(g.madeDate||'-')}</span></span><span class='meta-item'><span class='meta-k'>用布</span><span class='meta-v'>${fmt(g.usedLength,'米')}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>布料</span><span class='meta-v'>${esc(fabricName(g.fabricId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>纸样</span><span class='meta-v'>${esc(patternName(g.patternId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>尺码</span><span class='meta-v'>${esc(sizeName(g.sizeId)||'-')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
+    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>日期</span><span class='meta-v'>${esc(g.madeDate||'-')}</span></span><span class='meta-item'><span class='meta-k'>用布</span><span class='meta-v'>${fmt(g.usedLength,'米')}</span></span><span class='meta-item'><span class='meta-k'>估值</span><span class='meta-v'>${fmtPrice(g.value)}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>布料</span><span class='meta-v'>${esc(fabricName(g.fabricId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>纸样</span><span class='meta-v'>${esc(patternName(g.patternId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>尺码</span><span class='meta-v'>${esc(sizeName(g.sizeId)||'-')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
     card.querySelectorAll('button')[0].onclick=()=>showGarmentForm(g);
     card.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除成衣？')){const oldFabricId=g.fabricId;state.data.garments=state.data.garments.filter(x=>x.id!==g.id);recalculateFabricLength(oldFabricId);save();renderGarments();}};
     list.appendChild(card);
@@ -329,6 +329,7 @@ function showGarmentForm(g, defaultFabricId='') {
   <label class='field'><span>成衣名称</span><input name='name' placeholder='成衣名称' value='${esc((g&&g.name)||'')}' /></label>
   <label class='field'><span>制作日期</span><input name='madeDate' type='date' value='${esc((g&&g.madeDate)||new Date().toISOString().slice(0,10))}' /></label>
   <label class='field'><span>使用布长(米)</span><input name='usedLength' type='number' min='0' step='0.1' placeholder='使用布长(米)' value='${g && g.usedLength != null ? g.usedLength : ''}' /></label>
+  <label class='field'><span>估值(元)</span><input name='value' type='number' min='0' step='0.01' placeholder='估值(元)' value='${g && g.value != null ? g.value : ''}' /></label>
   <label class='field'><span>布料</span><select name='fabricId'>${options}</select></label>
   <label class='field'><span>纸样</span><select name='patternId'><option value=''>不关联纸样</option>${state.data.patterns.map((p)=>`<option value='${p.id}' ${p.id===(g&&g.patternId)?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label>
   <label class='field'><span>尺码</span><select name='sizeId'><option value=''>不关联尺码</option>${state.data.sizes.map((s)=>`<option value='${s.id}' ${s.id===(g&&g.sizeId)?'selected':''}>${esc(s.name||'未命名尺码')}</option>`).join('')}</select></label>
@@ -338,7 +339,7 @@ function showGarmentForm(g, defaultFabricId='') {
   <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form>`)) return;
   $('#closeG').onclick=closeEditor;
   setupImagePreview('#garmentImageInput','#garmentImagePreview','#garmentImageTip');
-  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,fabricId,patternId:val(fd,'patternId')||null,sizeId:val(fd,'sizeId')||null,notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);if(!save())return;showToast('保存成功!');route('garments');};
+  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,value:numAny(fd,'value'),fabricId,patternId:val(fd,'patternId')||null,sizeId:val(fd,'sizeId')||null,notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);if(!save())return;showToast('保存成功!');route('garments');};
 }
 
 function usedLengthSumByFabric(fabricId, excludeGarmentId = null){
@@ -501,6 +502,7 @@ function id(){
 }
 function val(fd,k){return String(fd.get(k)||'').trim();}
 function num(fd,k){const n=Number(fd.get(k));return Number.isFinite(n)&&n>0?n:null;}
+function numAny(fd,k){const raw=String(fd.get(k)||'').trim();if(raw==='')return null;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:null;}
 function fmt(v,u){return typeof v==='number'?`${v}${u}`:'-';}
 function fmtPrice(v){return typeof v==='number'?`¥${v.toFixed(2)}`:'-';}
 function fabricName(fid){const f = state.data.fabrics.find((x)=>x.id===fid);return f ? f.name : '';}
