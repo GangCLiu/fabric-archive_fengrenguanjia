@@ -19,6 +19,7 @@ const state = {
 };
 
 let saveErrorNotified = false;
+let legacyEditorMode = false;
 
 const $ = (s) => document.querySelector(s);
 const app = $('#app');
@@ -26,12 +27,22 @@ const app = $('#app');
 init();
 
 function init() {
+  detectEditorMode();
   load();
   ensureOriginalLengthAndRecalculate();
   renderNav();
   setupUsageModal();
   setupImageZoom();
   route(state.page);
+}
+
+function detectEditorMode() {
+  const hasCssSupports = typeof CSS !== 'undefined' && CSS && typeof CSS.supports === 'function';
+  const modernOverlaySupport = hasCssSupports
+    && CSS.supports('inset', '0')
+    && CSS.supports('width', 'min(100px, 90vw)');
+  legacyEditorMode = !modernOverlaySupport;
+  document.body.classList.toggle('legacy-editor', legacyEditorMode);
 }
 
 
@@ -149,7 +160,9 @@ function openEditor(content) {
   const panel = $('#editPanel');
   if (!panel) return null;
   panel.innerHTML = `<div class='editor-dialog panel'>${content}</div>`;
+  panel.classList.toggle('legacy-editor-overlay', legacyEditorMode);
   panel.classList.remove('hidden');
+  panel.style.display = legacyEditorMode ? 'block' : 'flex';
   panel.onclick = (e) => {
     if (e.target === panel) closeEditor();
   };
@@ -162,6 +175,7 @@ function closeEditor() {
   if (!panel) return;
   panel.innerHTML = '';
   panel.classList.add('hidden');
+  panel.style.display = 'none';
   document.body.classList.remove('modal-open');
 }
 
