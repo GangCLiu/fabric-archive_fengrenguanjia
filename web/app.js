@@ -268,10 +268,10 @@ function fabricCard(f) {
   tpl.querySelector('.line1').innerHTML = `<span class='meta-item'><span class='meta-k'>店铺</span><span class='meta-v'>${esc(f.shop||'未知店铺')}</span></span><span class='meta-item'><span class='meta-k'>长度</span><span class='meta-v'>${fmt(f.length,'米')}</span></span><span class='meta-item'><span class='meta-k'>幅宽</span><span class='meta-v'>${fmt(f.width,'cm')}</span></span>`;
   tpl.querySelector('.line2').innerHTML = `<span class='meta-item'><span class='meta-k'>价格</span><span class='meta-v'>${fmtPrice(f.price)}</span></span><span class='meta-item'><span class='meta-k'>成衣</span><span class='meta-v'>${state.data.garments.filter((g)=>g.fabricId===f.id).length} 件</span></span>`;
   const actions = tpl.querySelector('.actions');
-  actions.innerHTML = `<button class='ghost'>详情/编辑</button><button>添加成衣</button><button class='ghost'>删除</button>`;
+  actions.innerHTML = `<button class='ghost'>编辑</button><button>添加成衣</button><button class='ghost'>${f.favorite ? '❤️' : '🤍'}</button>`;
   actions.children[0].onclick = () => showFabricForm(f);
   actions.children[1].onclick = () => showGarmentForm(undefined, f.id);
-  actions.children[2].onclick = () => { if (confirm('确认删除布料？')) { state.data.fabrics = state.data.fabrics.filter((x)=>x.id!==f.id); state.data.garments = state.data.garments.filter((g)=>g.fabricId!==f.id); save(); renderHome(); } };
+  actions.children[2].onclick = () => toggleFavorite(f, renderHome);
   return tpl;
 }
 
@@ -290,10 +290,21 @@ function showFabricForm(f) {
   <label class='field'><span>布料图片</span><input id='fabricImageInput' name='image' type='file' accept='image/*' /></label>
   <div class='image-preview-wrap'><img id='fabricImagePreview' class='image-preview ${(f&&f.image) ? '' : 'hidden'}' src='${esc((f&&f.image)||'')}' alt='布料图片预览' data-preview-image /><div id='fabricImageTip' class='preview-tip ${(f&&f.image) ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div>
   ${garmentPreview}
-  <div class='row'><button type='submit'>保存</button><button type='button' class='ghost' id='cancelFabric'>取消</button></div>
+  <div class='row'><button type='submit'>保存</button><button type='button' class='ghost' id='cancelFabric'>取消</button>${f ? "<button type='button' class='ghost' id='deleteFabric'>删除布料</button>" : ''}</div>
   </form>`);
   setupImagePreview('#fabricImageInput','#fabricImagePreview','#fabricImageTip');
   $('#cancelFabric').onclick = closeEditor;
+  if (f) {
+    $('#deleteFabric').onclick = () => {
+      if (!confirm('确认删除布料？删除后将同时删除关联成衣。')) return;
+      state.data.fabrics = state.data.fabrics.filter((x)=>x.id!==f.id);
+      state.data.garments = state.data.garments.filter((g)=>g.fabricId!==f.id);
+      if (!save()) return;
+      showToast('删除成功!');
+      closeEditor();
+      renderHome();
+    };
+  }
   $('#fabricForm').onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -315,8 +326,8 @@ function showFabricForm(f) {
 
 function renderGarments() {
   const q = state.search.garments.toLowerCase();
-  const rows = state.data.garments.filter((g)=>`${g.name} ${fabricName(g.fabricId)} ${patternName(g.patternId)} ${sizeName(g.sizeId)} ${g.notes||''}`.toLowerCase().includes(q));
-  app.innerHTML = `<section class='panel toolbar'><input id='searchG' placeholder='搜索成衣/布料/纸样/尺码/备注' value='${esc(state.search.garments)}' /><button id='addG'>新增成衣</button></section>
+  const rows = state.data.garments.filter((g)=>`${g.name} ${fabricName(g.fabricId)} ${patternName(g.patternId)} ${sizeName(g.sizeId)} ${g.notes||''} ${g.processFlow||''} ${g.reviewCraft||''} ${g.reviewFabricChoice||''} ${g.reviewPatternFit||''} ${g.reviewOther||''}`.toLowerCase().includes(q));
+  app.innerHTML = `<section class='panel toolbar'><input id='searchG' placeholder='搜索成衣/布料/纸样/尺码/备注/复盘' value='${esc(state.search.garments)}' /><button id='addG'>新增成衣</button></section>
   <section class='panel' id='garmentBox'></section>
   <section id='editPanel' class='editor-overlay hidden'></section>`;
   $('#searchG').oninput=(e)=>{state.search.garments=e.target.value;renderGarments();};
@@ -328,9 +339,9 @@ function renderGarments() {
   rows.forEach((g)=>{
     const card=document.createElement('article');
     card.className='card-item';
-    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>日期</span><span class='meta-v'>${esc(g.madeDate||'-')}</span></span><span class='meta-item'><span class='meta-k'>用布</span><span class='meta-v'>${fmt(g.usedLength,'米')}</span></span><span class='meta-item'><span class='meta-k'>估值</span><span class='meta-v'>${fmtPrice(g.value)}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>布料</span><span class='meta-v'>${esc(fabricName(g.fabricId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>纸样</span><span class='meta-v'>${esc(patternName(g.patternId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>尺码</span><span class='meta-v'>${esc(sizeName(g.sizeId)||'-')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
+    card.innerHTML=`<img class='thumb' src='${g.image||IMG_EMPTY}' alt='成衣图' data-preview-image/><h4 class='title'>${esc(g.name||'未命名')}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>日期</span><span class='meta-v'>${esc(g.madeDate||'-')}</span></span><span class='meta-item'><span class='meta-k'>用布</span><span class='meta-v'>${fmt(g.usedLength,'米')}</span></span><span class='meta-item'><span class='meta-k'>估值</span><span class='meta-v'>${fmtPrice(g.value)}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>布料</span><span class='meta-v'>${esc(fabricName(g.fabricId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>纸样</span><span class='meta-v'>${esc(patternName(g.patternId)||'-')}</span></span><span class='meta-item'><span class='meta-k'>尺码</span><span class='meta-v'>${esc(sizeName(g.sizeId)||'-')}</span></span></p><p class='line2'>工艺流程：${esc(g.processFlow||'-')}</p><p class='line2'>复盘｜工艺：${esc(g.reviewCraft||'-')}；面料选择：${esc(g.reviewFabricChoice||'-')}；纸样版型修正：${esc(g.reviewPatternFit||'-')}；其他：${esc(g.reviewOther||'-')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>${g.favorite ? '❤️' : '🤍'}</button></div>`;
     card.querySelectorAll('button')[0].onclick=()=>showGarmentForm(g);
-    card.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除成衣？')){const oldFabricId=g.fabricId;state.data.garments=state.data.garments.filter(x=>x.id!==g.id);recalculateFabricLength(oldFabricId);save();renderGarments();}};
+    card.querySelectorAll('button')[1].onclick=()=>toggleFavorite(g, renderGarments);
     list.appendChild(card);
   });
 }
@@ -349,11 +360,19 @@ function showGarmentForm(g, defaultFabricId='') {
   <label class='field'><span>尺码</span><select name='sizeId'><option value=''>不关联尺码</option>${state.data.sizes.map((s)=>`<option value='${s.id}' ${s.id===(g&&g.sizeId)?'selected':''}>${esc(s.name||'未命名尺码')}</option>`).join('')}</select></label>
   <label class='field'><span>成衣图片</span><input id='garmentImageInput' name='image' type='file' accept='image/*' /></label>
   <div class='image-preview-wrap'><img id='garmentImagePreview' class='image-preview ${(g&&g.image) ? '' : 'hidden'}' src='${esc((g&&g.image)||'')}' alt='成衣图片预览' data-preview-image /><div id='garmentImageTip' class='preview-tip ${(g&&g.image) ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div>
+  <label class='field image-preview-wrap'><span>工艺流程</span><textarea name='processFlow' placeholder='每次制作后的工艺流程记录'>${esc((g&&g.processFlow)||'')}</textarea></label>
+  <label class='field image-preview-wrap'><span>复盘：工艺</span><textarea name='reviewCraft' placeholder='记录工艺上的优缺点'>${esc((g&&g.reviewCraft)||'')}</textarea></label>
+  <label class='field image-preview-wrap'><span>复盘：面料选择</span><textarea name='reviewFabricChoice' placeholder='记录面料选择上的优缺点'>${esc((g&&g.reviewFabricChoice)||'')}</textarea></label>
+  <label class='field image-preview-wrap'><span>复盘：纸样版型修正</span><textarea name='reviewPatternFit' placeholder='记录纸样/版型需要修正的点'>${esc((g&&g.reviewPatternFit)||'')}</textarea></label>
+  <label class='field image-preview-wrap'><span>复盘：其他</span><textarea name='reviewOther' placeholder='记录其他复盘内容'>${esc((g&&g.reviewOther)||'')}</textarea></label>
   <label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc((g&&g.notes)||'')}</textarea></label>
-  <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button></div></form>`)) return;
+  <div class='row'><button type='submit'>保存</button><button id='closeG' type='button' class='ghost'>取消</button>${g ? "<button id='deleteG' type='button' class='ghost'>删除成衣</button>" : ''}</div></form>`)) return;
   $('#closeG').onclick=closeEditor;
+  if (g) {
+    $('#deleteG').onclick=()=>{if(confirm('确认删除成衣？')){const oldFabricId=g.fabricId;state.data.garments=state.data.garments.filter(x=>x.id!==g.id);recalculateFabricLength(oldFabricId);if(!save())return;showToast('删除成功!');route('garments');}};
+  }
   setupImagePreview('#garmentImageInput','#garmentImagePreview','#garmentImageTip');
-  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,value:numAny(fd,'value'),fabricId,patternId:val(fd,'patternId')||null,sizeId:val(fd,'sizeId')||null,notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);if(!save())return;showToast('保存成功!');route('garments');};
+  $('#gForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const fabricId=fd.get('fabricId');const used=num(fd,'usedLength');const fabric=state.data.fabrics.find(f=>f.id===fabricId);const available=(fabric&&fabric.originalLength)!=null?Number(fabric.originalLength)-usedLengthSumByFabric(fabricId,(g&&g.id)):(fabric&&fabric.length);if(used&&available!=null&&used>available){alert('使用布长不能超过当前剩余长度');return;}const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(g&&g.image)||'';const rec={id:(g&&g.id)||id(),name:val(fd,'name')||'未命名成衣',madeDate:val(fd,'madeDate'),usedLength:used,value:numAny(fd,'value'),fabricId,patternId:val(fd,'patternId')||null,sizeId:val(fd,'sizeId')||null,processFlow:val(fd,'processFlow'),reviewCraft:val(fd,'reviewCraft'),reviewFabricChoice:val(fd,'reviewFabricChoice'),reviewPatternFit:val(fd,'reviewPatternFit'),reviewOther:val(fd,'reviewOther'),notes:val(fd,'notes'),image,createdAt:(g&&g.createdAt)||new Date().toISOString()};const oldFabricId=(g&&g.fabricId)||null;upsert(state.data.garments,rec);if(oldFabricId&&oldFabricId!==fabricId)recalculateFabricLength(oldFabricId);recalculateFabricLength(fabricId);if(!save())return;showToast('保存成功!');route('garments');};
 }
 
 function usedLengthSumByFabric(fabricId, excludeGarmentId = null){
@@ -386,13 +405,16 @@ function renderPatterns() {
   $('#searchP').oninput=(e)=>{state.search.patterns=e.target.value;renderPatterns();};
   $('#addP').onclick=()=>showPatternForm();
   const box=$('#pList');
-  rows.forEach((p)=>{const d=document.createElement('article');d.className='card-item';d.innerHTML=`<img class='thumb' src='${p.image||IMG_EMPTY}'/><h4 class='title'>${esc(p.name)}</h4><p class='line1'>被使用 ${state.data.garments.filter(g=>g.patternId===p.id).length} 次</p><p class='line2'>${esc(p.notes||'')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;d.querySelectorAll('button')[0].onclick=()=>showPatternForm(p);d.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除纸样？')){state.data.patterns=state.data.patterns.filter(x=>x.id!==p.id);state.data.garments.forEach(g=>{if(g.patternId===p.id)g.patternId=null});save();renderPatterns();}};box.appendChild(d);});
+  rows.forEach((p)=>{const d=document.createElement('article');d.className='card-item';d.innerHTML=`<img class='thumb' src='${p.image||IMG_EMPTY}'/><h4 class='title'>${esc(p.name)}</h4><p class='line1'>被使用 ${state.data.garments.filter(g=>g.patternId===p.id).length} 次</p><p class='line2'>${esc(p.notes||'')}</p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>${p.favorite ? '❤️' : '🤍'}</button></div>`;d.querySelectorAll('button')[0].onclick=()=>showPatternForm(p);d.querySelectorAll('button')[1].onclick=()=>toggleFavorite(p, renderPatterns);box.appendChild(d);});
 }
 
 function showPatternForm(p){
-  if (!openEditor(`<h3>${p?'编辑':'新增'}纸样</h3><form id='pForm' class='form-grid'><label class='field'><span>纸样名称</span><input name='name' value='${esc((p&&p.name)||'')}' placeholder='纸样名称*' required/></label><label class='field'><span>纸样图片</span><input id='patternImageInput' name='image' type='file' accept='image/*'/></label><div class='image-preview-wrap'><img id='patternImagePreview' class='image-preview ${(p&&p.image) ? '' : 'hidden'}' src='${esc((p&&p.image)||'')}' alt='纸样图片预览' data-preview-image /><div id='patternImageTip' class='preview-tip ${(p&&p.image) ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div><label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc((p&&p.notes)||'')}</textarea></label><div class='row'><button>保存</button><button id='closeP' type='button' class='ghost'>取消</button></div></form>`)) return;
+  if (!openEditor(`<h3>${p?'编辑':'新增'}纸样</h3><form id='pForm' class='form-grid'><label class='field'><span>纸样名称</span><input name='name' value='${esc((p&&p.name)||'')}' placeholder='纸样名称*' required/></label><label class='field'><span>纸样图片</span><input id='patternImageInput' name='image' type='file' accept='image/*'/></label><div class='image-preview-wrap'><img id='patternImagePreview' class='image-preview ${(p&&p.image) ? '' : 'hidden'}' src='${esc((p&&p.image)||'')}' alt='纸样图片预览' data-preview-image /><div id='patternImageTip' class='preview-tip ${(p&&p.image) ? 'hidden' : ''}'>单击选择图片，保存前可预览；单击图片可放大查看。</div></div><label class='field image-preview-wrap'><span>备注</span><textarea name='notes' placeholder='备注'>${esc((p&&p.notes)||'')}</textarea></label><div class='row'><button>保存</button><button id='closeP' type='button' class='ghost'>取消</button>${p ? "<button id='deleteP' type='button' class='ghost'>删除纸样</button>" : ''}</div></form>`)) return;
   setupImagePreview('#patternImageInput','#patternImagePreview','#patternImageTip');
   $('#closeP').onclick=closeEditor;
+  if (p) {
+    $('#deleteP').onclick=()=>{if(confirm('确认删除纸样？')){state.data.patterns=state.data.patterns.filter(x=>x.id!==p.id);state.data.garments.forEach(g=>{if(g.patternId===p.id)g.patternId=null});if(!save())return;showToast('删除成功!');route('patterns');}};
+  }
   $('#pForm').onsubmit=async(e)=>{e.preventDefault();const fd=new FormData(e.target);const img=fd.get('image');const image=img&&img.size>0?await toDataUrl(img):(p&&p.image)||'';upsert(state.data.patterns,{id:(p&&p.id)||id(),name:val(fd,'name'),notes:val(fd,'notes'),image,createdAt:(p&&p.createdAt)||new Date().toISOString()});if(!save())return;showToast('保存成功!');route('patterns');};
 }
 
@@ -409,9 +431,8 @@ function renderSizes(){
   rows.forEach((s)=>{
     const card=document.createElement('article');
     card.className='card-item';
-    card.innerHTML=`<h4 class='title'>${esc(s.name)}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>身高</span><span class='meta-v'>${fmt(s.height_cm,'cm')}</span></span><span class='meta-item'><span class='meta-k'>体重</span><span class='meta-v'>${fmt(s.weight_kg,'kg')}</span></span><span class='meta-item'><span class='meta-k'>领围/肩宽</span><span class='meta-v'>${fmt(s.neck_cm,'cm')} / ${fmt(s.shoulder_cm,'cm')}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>三围</span><span class='meta-v'>胸${fmt(s.bust_cm,'')} 腰${fmt(s.waist_cm,'')} 臀${fmt(s.hip_cm,'')}</span></span><span class='meta-item'><span class='meta-k'>长度</span><span class='meta-v'>臂${fmt(s.arm_length_cm,'')} 衣${fmt(s.garment_length_cm,'')} 腿${fmt(s.leg_length_cm,'')}</span></span></p><div class='row'><button class='ghost'>编辑</button><button class='ghost'>删除</button></div>`;
-    card.querySelectorAll('button')[0].onclick=()=>showSizeForm(s);
-    card.querySelectorAll('button')[1].onclick=()=>{if(confirm('确认删除尺码档案？')){state.data.sizes=state.data.sizes.filter(x=>x.id!==s.id);save();renderSizes();}};
+    card.innerHTML=`<h4 class='title'>${esc(s.name)}</h4><p class='line1'><span class='meta-item'><span class='meta-k'>身高</span><span class='meta-v'>${fmt(s.height_cm,'cm')}</span></span><span class='meta-item'><span class='meta-k'>体重</span><span class='meta-v'>${fmt(s.weight_kg,'kg')}</span></span><span class='meta-item'><span class='meta-k'>领围/肩宽</span><span class='meta-v'>${fmt(s.neck_cm,'cm')} / ${fmt(s.shoulder_cm,'cm')}</span></span></p><p class='line2'><span class='meta-item'><span class='meta-k'>三围</span><span class='meta-v'>胸${fmt(s.bust_cm,'')} 腰${fmt(s.waist_cm,'')} 臀${fmt(s.hip_cm,'')}</span></span><span class='meta-item'><span class='meta-k'>长度</span><span class='meta-v'>臂${fmt(s.arm_length_cm,'')} 衣${fmt(s.garment_length_cm,'')} 腿${fmt(s.leg_length_cm,'')}</span></span></p><div class='row'><button class='ghost'>编辑</button></div>`;
+    card.querySelector('button').onclick=()=>showSizeForm(s);
     list.appendChild(card);
   });
 }
@@ -424,8 +445,11 @@ function showSizeForm(s){
 <label class='field'><span>腰围(cm)</span><input name='waist_cm' type='number' step='0.1' placeholder='腰围(cm)' value='${s && s.waist_cm != null ? s.waist_cm : ''}'/></label><label class='field'><span>臀围(cm)</span><input name='hip_cm' type='number' step='0.1' placeholder='臀围(cm)' value='${s && s.hip_cm != null ? s.hip_cm : ''}'/></label>
 <label class='field'><span>臂长(cm)</span><input name='arm_length_cm' type='number' step='0.1' placeholder='臂长(cm)' value='${s && s.arm_length_cm != null ? s.arm_length_cm : ''}'/></label><label class='field'><span>衣长(cm)</span><input name='garment_length_cm' type='number' step='0.1' placeholder='衣长(cm)' value='${s && s.garment_length_cm != null ? s.garment_length_cm : ''}'/></label>
 <label class='field'><span>腿长(cm)</span><input name='leg_length_cm' type='number' step='0.1' placeholder='腿长(cm)' value='${s && s.leg_length_cm != null ? s.leg_length_cm : ''}'/></label><label class='field'><span>描述</span><textarea name='description' placeholder='描述'>${esc((s&&s.description)||'')}</textarea></label>
-<div class='row'><button>保存</button><button id='closeS' type='button' class='ghost'>取消</button></div></form>`)) return;
+<div class='row'><button>保存</button><button id='closeS' type='button' class='ghost'>取消</button>${s ? "<button id='deleteS' type='button' class='ghost'>删除尺码档案</button>" : ''}</div></form>`)) return;
   $('#closeS').onclick=closeEditor;
+  if (s) {
+    $('#deleteS').onclick=()=>{if(confirm('确认删除尺码档案？')){state.data.sizes=state.data.sizes.filter(x=>x.id!==s.id);if(!save())return;showToast('删除成功!');route('sizes');}};
+  }
   $('#sForm').onsubmit=(e)=>{e.preventDefault();const fd=new FormData(e.target);upsert(state.data.sizes,{id:(s&&s.id)||id(),name:val(fd,'name'),height_cm:num(fd,'height_cm'),weight_kg:num(fd,'weight_kg'),neck_cm:num(fd,'neck_cm'),shoulder_cm:num(fd,'shoulder_cm'),bust_cm:num(fd,'bust_cm'),waist_cm:num(fd,'waist_cm'),hip_cm:num(fd,'hip_cm'),arm_length_cm:num(fd,'arm_length_cm'),garment_length_cm:num(fd,'garment_length_cm'),leg_length_cm:num(fd,'leg_length_cm'),description:val(fd,'description'),createdAt:(s&&s.createdAt)||new Date().toISOString()});if(!save())return;showToast('保存成功!');route('sizes');};
 }
 
@@ -442,6 +466,13 @@ function filteredFabrics(){
     const matchShop = state.shopFilter === '全部' || (f.shop||'') === state.shopFilter;
     return matchQ && matchShop;
   });
+}
+
+function toggleFavorite(record, rerender) {
+  if (!record) return;
+  record.favorite = !record.favorite;
+  if (!save()) return;
+  rerender();
 }
 
 function showToast(msg) {
